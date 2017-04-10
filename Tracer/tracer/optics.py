@@ -49,7 +49,7 @@ def reflections(ray_dirs, normals):
     """
     vertical = N.sum(ray_dirs*normals, axis=0)*normals # normal dot ray, really
     
-    return ray_dirs - 2*vertical
+    return ray_dirs - 2.*vertical
 
 def refractions(n1, n2, ray_dirs, normals):
     """Generates directions of rays refracted according to Snells's law (in its vector

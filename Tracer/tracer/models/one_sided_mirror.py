@@ -50,8 +50,8 @@ def rect_one_sided_mirror(width, height, absorptivity=0., sigma_xy=0., option=No
 	obj = AssembledObject(surfs=[surf])
 	obj.surfaces_for_next_iteration = types.MethodType(
 		surfaces_for_next_iteration, obj, obj.__class__)
-	return obj
 
+	return obj
 
 
 def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sigma_xy=1e-3, option=None, location=None, rotation=None):
@@ -90,7 +90,7 @@ def one_sided_receiver(width, height, absorptivity=1., location=None, rotation=N
 	front = Surface(RectPlateGM( height, width), 
 		opt.ReflectiveReceiver(absorptivity))
 	back = Surface(RectPlateGM(width, height), opt.ReflectiveReceiver(1.),
-		location=r_[0., 0., -1e-9])
+		location=r_[0., 0., -1e-8])
 	obj = AssembledObject(surfs=[front, back])
 	obj.surfaces_for_next_iteration = types.MethodType(
 		surfaces_for_next_iteration, obj, obj.__class__)

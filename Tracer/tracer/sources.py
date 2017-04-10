@@ -49,12 +49,15 @@ def pillbox_sunshape_directions(num_rays, ang_range):
     """
     # Diffuse divergence from +Z:
     # development based on eq. 2.12  from [1]
-    xi1 = random.uniform(high=2.*N.pi, size=num_rays)
-    xi2 = random.uniform(size=num_rays)
-    theta = N.arcsin(N.sin(ang_range)*N.sqrt(xi2))
+    xi1 = random.uniform(high=2.*N.pi, size=num_rays) # Phi
+    xi2 = random.uniform(size=num_rays) # Rtheta
+    #theta = N.arcsin(N.sin(ang_range)*N.sqrt(xi2))
+    #sin_th = N.sin(theta)
+    #a = N.vstack((N.cos(xi1)*sin_th, N.sin(xi1)*sin_th , N.cos(theta)))
 
-    sin_th = N.sin(theta)
-    a = N.vstack((N.cos(xi1)*sin_th, N.sin(xi1)*sin_th , N.cos(theta)))
+    sinsqrt = N.sin(ang_range)*N.sqrt(xi2)     
+
+    a = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
 
     return a
 
@@ -303,7 +306,7 @@ def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_proce
     
     rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 
-    return rayb
+    return rayb#, thetas
 
 def square_bundle(num_rays, center, direction, width):
     """
@@ -353,21 +356,25 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , ra
     r1 = float(r1)
     depth = float(depth)
 
-    num_rays = float(num_rays)
+    num_rays = int(num_rays)
 
     dir_flat = pillbox_sunshape_directions(num_rays, angular_range)
 
     c = (r1-r0)/depth
 
     R = random.uniform(size=num_rays)
-
+    
+    '''
     if r0<r1:
         zs = depth*N.sqrt(R)
     else:
         zs = depth*(1.-N.sqrt(R))
+    '''
+    rs = N.sqrt((r1**2.-r0**2.)*R+r0**2.)
+    zs = (rs-r0)/((r1-r0)/depth)
 
     phi_s = random.uniform(low=angular_span[0], high=angular_span[1], size=num_rays)
-    rs = r0+c*zs
+
     xs = rs * N.cos(phi_s)
     ys = rs * N.sin(phi_s)
 
@@ -376,12 +383,12 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , ra
     yrot = roty(theta_rot)[:3,:3]
     local_unit = N.zeros((N.shape(dir_flat)))
     for t in xrange(N.shape(dir_flat)[1]):
+        rotd = N.dot(yrot, dir_flat[:,t])
         zrot = rotz(phi_s[t])[:3,:3]
-        rot = N.dot(zrot, yrot)
-        local_unit[:,t] = N.dot(rot, dir_flat[:,t])
+        local_unit[:,t] = N.dot(zrot, rotd)
 
     if rays_in == False:
-        local_unit = -local_unit
+        local_unit = -1.*local_unit
 
     vertices_local = N.vstack((xs, ys, zs))
 
@@ -390,10 +397,10 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , ra
     directions = N.dot(perp_rot, local_unit)
 
     if flux == None:
-        energy = N.ones(num_rays)/num_rays/procs
+        energy = N.ones(num_rays)/float(num_rays)/procs
     else:
         area = (angular_span[1]-angular_span[0])*(r1+r0)/2.*N.sqrt(abs(r1-r0)**2.+depth**2.)
-        energy = N.ones(num_rays)*flux*area/num_rays/procs
+        energy = N.ones(num_rays)*flux*area/float(num_rays)/procs
 
     rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 
@@ -418,7 +425,7 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
     '''
     rc = float(rc)
     lc = float(lc)
-    num_rays = float(num_rays)
+    num_rays = int(num_rays)
 
     zs = lc*random.uniform(size=num_rays)
 
@@ -448,10 +455,10 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
     plt.show()
     '''
     if flux == None:
-        energy = N.ones(num_rays)/num_rays/procs
+        energy = N.ones(num_rays)/float(num_rays)/procs
     else:
         area = rc*(angular_span[1]-angular_span[0])*lc
-        energy = N.ones(num_rays)*flux*area/num_rays/procs
+        energy = N.ones(num_rays)*flux*area/float(num_rays)/procs
 
     rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 

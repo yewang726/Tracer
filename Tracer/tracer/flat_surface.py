@@ -188,7 +188,7 @@ class RectPlateGM(FiniteFlatGM):
         impact points outside a centered rectangle.
         """
         ray_prms = FiniteFlatGM.find_intersections(self, frame, ray_bundle)
-        ray_prms[N.any(abs(self._local[:2]) > self._half_dims, axis=0)] = N.inf
+        ray_prms[N.any(N.abs(self._local[:2]) > self._half_dims, axis=0)] = N.inf
         del self._local
         return ray_prms
     

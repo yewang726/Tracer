@@ -229,7 +229,7 @@ class TwoNparamcav(Assembly):
 
 		return self.bin_abs
 
-	def temperature_guess(self, T_in, p_in, T_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions_guess, coating_thickness, coating_conductivity, tube_roughness, passive = None):
+	def temperature_guess(self, T_in, p_in, T_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions_guess, coating_thickness, coating_conductivity, tube_roughness, uconvloss, passive = None):
 		'''
 		Makes a first guess on temperature profiles approximating the enthalpy gain of the water/steam mixture to be equal to flux input on the tubes external walls. The tube walls are coated with a selective coating. Default arguments are for Pyromark2500(R).
 
@@ -248,16 +248,12 @@ class TwoNparamcav(Assembly):
 		Returns:
 		- strings 'good_geom' or 'bad_geom' depending on the mass flow guess to meet the input/output arguments and amount of actually going in the receiver. This is a quick hack to prevent issues with receivers forcing in the required inpu/output by lowering the mass flow too much/putting it negative, thus impacting the enthalpy guess... and basically screwing-up the convergence process for non-performing geometries.
 		'''
-		# Get starting enthalpy via Freesteam
-		h_in = steam_pT(p_in,T_in).h
-
 		# Get active surfaces net radiative power
 		active = N.ones(len(self.areas), dtype = N.bool)
 		active[0] = 0. # aperture
+
 		if passive != None:
 			active[passive] = 0.
-
-		qnets = 	self.bin_abs[active[1:]]+emissions_guess[active[1:]]
 
 		# Check the tube_diameters arrays or make one:
 		tube_diameters_in = N.hstack([tube_diameters_in])
@@ -283,62 +279,57 @@ class TwoNparamcav(Assembly):
 		self.tube_lengths = tube_lengths+2.*N.pi*(R_out-R_in)
 		tube_positions = N.add.accumulate(N.hstack([0,self.tube_lengths]))
 
-		# Initialise temperatures, pressures and steam quality at each position along the flow path:
-		Ts_p = N.ones(len(tube_positions))*T_in
-		ps_p = N.ones(len(tube_positions))*p_in
+		# Initialise pressures and steam quality at each position along the flow path:
+		self.p = N.ones(len(tube_positions))*p_in
 		self.qual = N.zeros(len(tube_positions))
 
-		# Evaluate the enthalpy at the outlet:
-		h_out = steam_pT(ps_p[-1], T_out).h
+		# Correlation single phase:
+		def single_phase_u(Re, Pr, f_F, k, tube_D):
+			if Re<1e4:
+			#if Re<1e5: # STG code error
+				# Gnielinski:
+				return ((Re-1000.)*Pr*(f_F*k/(2.*tube_D)))/(1.+12.7*(Pr**(2./3.)-1.)*N.sqrt(f_F/2.))
+			else:
+				# Petukhov
+				return (Re*Pr*(f_F*k/(2.*tube_D))/(1.07+12.7*(Pr**(2./3.)-1.)*N.sqrt(f_F/2.)))
+
+
+		# Evaluate convective losses and qnets:
+		Qconvloss = uconvloss*self.areas[1:]*(self.T[1:]-self.T[0])
+		qnets = 	self.bin_abs[active[1:]]-emissions_guess[active[1:]]-Qconvloss[active[1:]]
+
+		# Get starting enthalpy via Freesteam and initialise enthalpy array:
+		h_in = steam_pT(p_in,T_in).h
+		h_out = steam_pT(self.p[-1], T_out).h
+		hs_p = h_in+N.add.accumulate(N.hstack([0,qnets])/N.sum(qnets))*(h_out-h_in)
+		self.h = copy(hs_p)
 
 		# Evaluate the mass-flow:
 		self.m = N.sum(qnets)/(h_out-h_in)
 
-		# Evaluate the enthalpies
-		hs_p = N.zeros(len(self.areas[active])+1)
-		hs_p[0] = h_in
-
-		for i in xrange(1,len(hs_p)):
-			hs_p[i] = hs_p[i-1]+(qnets[i-1])/self.m
-		self.h = hs_p
-
-		# Initialise internal convective heat trasnfer coefficient:
-		uconv = N.zeros(len(tube_diameters_in))
-
-		# Correlations:
-		def Gnielinski(Re, Pr, f_F, k, tube_D):
-			return ((Re-1000.)-Pr*(f_F*k/(2.*tube_D)))/(1.+12.7*(Pr**(2./3.)-1.)*N.sqrt(f_F/2.))
-
-		def Pethukov(Re, Pr, f_F, k, tube_D):
-			return (Re*Pr*(f_F*k/(2.*tube_D))/(1.07+12.7*(Pr**(2./3.)-1.)*N.sqrt(f_F/2.)))
-
-		# Enthalopies loop:
+		# Enthalpy convergence loop:
 		conv_h = N.ones(len(self.h))*N.inf
-		while (conv_h>0.0001).all():
-			# Evaluate the mass-flow:
-			self.m = N.sum(qnets)/(self.h[-1]-h_in)
+		while (conv_h>0.0001).any():
 
-			#FIXME: need a more reliable convergence insurance
-			if self.m < 0.01:
-				print 'bad_geom'
-				return 'bad_geom'
-	
+			# Evaluate convective losses and qnets:
+			Qconvloss = uconvloss*self.areas[1:]*(self.T[1:]-self.T[0])
+			qnets = 	self.bin_abs[active[1:]]-emissions_guess[active[1:]]-Qconvloss[active[1:]]
+
+			# Initialise internal convective heat trasnfer coefficient:
+			uconv = N.zeros(len(tube_diameters_in))
+
 			# Go through the flow-path, actualise the pressures and evaluate the heat transfer coefficients.
 			for i in xrange(len(tube_positions)):
 
-				# Evaluate the enthalpy:
-				if i>0:
-					hs_p[i] = hs_p[i-1]+(qnets[i-1])/self.m
-
 				# Evaluate the steam properties:
-				steam_state = steam_ph(ps_p[i], hs_p[i])
+				steam_state = steam_ph(self.p[i], hs_p[i])
 				rho = steam_state.rho
 				mu = steam_state.mu
 				k = steam_state.k
 				Cp = steam_state.cp
 				x = steam_state.x
 
-				Tsat = Tsat_p(ps_p[i])
+				Tsat = Tsat_p(self.p[i])
 				steam_L = steam_Tx(Tsat, 0.)
 				steam_G = steam_Tx(Tsat, 1.)
 				h_LG = steam_G.h-steam_L.h	
@@ -352,39 +343,39 @@ class TwoNparamcav(Assembly):
 				Pr = mu/(k/Cp)
 
 				S = N.log(Re/(1.816*N.log(1.1*Re/(N.log(1.+1.1*Re)))))
-				f_D = (-2.*N.log10(tube_roughness/(3.71*tube_diameters_in[i])+2.18*S/Re))**(-2.)
+				f_D = (-2.*N.log10(tube_roughness/(3.71*tube_diameters_in[i])+2.18*S/Re))**(-2.) # Brkic using Lambert W-function approximation to solve Colebrook's implicit equation.
 				f_F = 0.25*f_D
-				#f_F = (1.58*N.log(Re)-3.28)**(-2) # Correlation in Kandlikar(less precise presumably)
-
-				# Calculate heat transfer coefficient:
-				if Re<1e4:
-					# Gnielinski:
-					uconv[i] = Gnielinski(Re, Pr, f_F, k, tube_diameters_in[i])
-				else:
-					# Petukhov
-					uconv[i] = Pethukov(Re, Pr, f_F, k, tube_diameters_in[i])
 				
-				if ((qual>0.) and (qual<1.)):
+				# Calculate heat transfer coefficient:
+				uconv[i] = single_phase_u(Re, Pr, f_F, k, tube_diameters_in[i])
+			
+				rho_L = steam_L.rho
+				rho_G = steam_G.rho
 
-					rho_L = steam_L.rho
-					rho_G = steam_G.rho
+				mult = 1. # Carey Friction factor multiplier
+
+				if ((qual>0.) and (qual<1.)):
+					mu_L = steam_L.mu
+					mu_G = steam_G.mu
+					#v_L = self.m/(rho_L*N.pi*(tube_diameters_in[i]/2.)**2.)
+					#Re_L = rho_L*v_L*tube_diameters_in[i]/mu_L
+					#mult = (1.+(mu_L/mu_G-1.)*qual)**(-0.25) # Carey Friction factor multiplier
+					#f_D = 4.*mult*(1.58*N.log(Re_L)-3.28)**(-2) # Correlation in Kandlikar (less precise presumably) which gives significantly lower heat transfer coefficients in the pre-dryout region
 
 					if (qual<0.8):
 
 						k_L = steam_L.k
-						mu_L = steam_L.mu
 						Cp_L = steam_L.cp
 						v_L = self.m/(rho_L*N.pi*(tube_diameters_in[i]/2.)**2.)
 
-						h_LG = steam_G.h-steam_L.h	
+						h_LG = steam_G.h-steam_L.h
 
-						#Re_L = rho_L*v_L*tube_diameters_in[i]/mu_L
-						Re_L = rho*v*(1.-qual)*tube_diameters_in[i]/mu_L # from Notes from Jose, not what I intuitively did with the book.
+						Re_L = rho_L*v_L*tube_diameters_in[i]/mu_L
+						#Re_L = rho_L*v_L*(1.-qual)*tube_diameters_in[i]/mu_L # from Notes from Jose. My interpretation is all liquid in the tube (saturated then).
 						Pr_L = mu_L/(k_L/Cp_L)
 						S_L = N.log(Re_L/(1.816*N.log(1.1*Re_L/(N.log(1.+1.1*Re_L)))))
-
-						f_F_L = 0.25*(-2.*N.log10(tube_roughness/(3.71*tube_diameters_in[i])+2.18*S_L/Re_L))**(-2.)
-						#f_F_L = (1.58*N.log(Re_L)-3.28)**(-2) # Correlation in Kandlikar(less precise presumably)
+						f_F_L = 0.25*((-2.*N.log10(tube_roughness/(3.71*tube_diameters_in[i])+2.18*S_L/Re_L))**(-2.))
+						#f_F_L = (1.58*N.log(Re_L)-3.28)**(-2) # Correlation in Kandlikar (less precise presumably) which gives significantly lower heat transfer coefficients in the pre-dryout region
 
 						# Kandlikar
 						Co = (rho_G/rho_L)**0.5*((1.-qual)/qual)**0.8
@@ -392,21 +383,18 @@ class TwoNparamcav(Assembly):
 						if i == 0:
 							Bo = 0.
 						else:
-							#Bo = qnets[i]/(N.pi*R_in[i]*tube_lengths[i])/(rho*v*h_LG)
-							Bo = qnets[i]/(N.pi*R_out[i]*tube_lengths[i])/(rho*v*h_LG) # Changed to the outer flux
-						if Re<1e4:
-							# Gnielinski:
-							uconv_L = Gnielinski(Re_L, Pr_L, f_F_L, k_L, tube_diameters_in[i])
-						else:
-							# Petukhov
-							uconv_L = Pethukov(Re_L, Pr_L, f_F_L, k_L, tube_diameters_in[i])
+							Bo = qnets[i]/(N.pi*R_in[i]*tube_lengths[i])/(rho*v*h_LG)
+							#Bo = qnets[i]/(N.pi*R_out[i]*tube_lengths[i])/(rho*v*h_LG) # Changed to the outer flux to compare with the STG version
+
+						uconv_L = single_phase_u(Re_L, Pr_L, f_F_L, k_L, tube_diameters_in[i])
 
 						uconvNB = uconv_L*(0.6683*Co**(-0.2)+1058.*Bo**0.7)*(1.-qual)**0.8
 						uconvCB = uconv_L*(1.136*Co**(-0.9)+667.2*Bo**0.7)*(1.-qual)**0.8
 
 						uconv[i] = N.amax([uconvNB, uconvCB])
-					
-					elif x<0.9:
+				
+					elif qual<0.9: # Here the validity of the correlation is changed from the STG version.				
+					#elif qual<1.:
 						# Groeneveld
 						a = 1.09e-3
 						b = 0.989
@@ -416,28 +404,46 @@ class TwoNparamcav(Assembly):
 						Y = 1.-0.1*((rho_L/rho_G-1.)*(1.-qual))**0.4
 
 						k_G = steam_G.k
-						mu_G = steam_G.mu
 						Cp_G = steam_G.cp
 						v_G = self.m/(rho_G*N.pi*(tube_diameters_in[i]/2.)**2.)
 
 						Re_G = rho_G*v_G*tube_diameters_in[i]/mu_G
 						Pr_G = mu_G/(k_G/Cp_G)
 
-						uconv[i] = a*(Re_G*(qual+rho_G/rho_L*(1.-qual)))**b*Pr_G**c*Y**d*k/tube_diameters_in[i]
-					
-				if i>0:
-					# Calculate pressure drop for the next element:
-					dp = f_D*self.tube_lengths[i-1]/(2.*R_in[i-1])*rho*v**2./2.
-					if i < (len(tube_positions)-1):
-						ps_p[i+1] = ps_p[i]-dp
-				self.qual[i] = qual
-			# Evaluate enthalpy convergence
-			conv_h = N.abs((self.h-hs_p)/self.h)
-			self.h = (hs_p+self.h)/2.
+						uconv[i] = a*(Re_G*(qual+rho_G/rho_L*(1.-qual)))**b*Pr_G**c*Y**d*k_G/tube_diameters_in[i]
 
-		
+				if i < (len(tube_positions)-1):
+					# Calculate pressure drop for the next element:
+					#f_D = 4.*f_F # For using the friction factor formula advised by Kandlikar
+					dp = f_D*self.tube_lengths[i]/(2.*R_in[i])*rho*v**2./2.	
+					steam_next = steam_ph(self.p[i+1], self.h[i+1])
+					rho_next = steam_next.rho
+					v_next = self.m/(rho_next*N.pi*(tube_diameters_in[i+1]/2.)**2.)
+					self.p[i+1] = self.p[i]+rho*v**2./2.-rho_next*v_next**2./2.-dp
+
+				# Store dryness fractions;
+				self.qual[i] = qual
+
+			# Evaluate the enthalpy at the outlet:
+			h_out = steam_pT(self.p[-1], T_out).h
+
+			# Evaluate the mass-flow:
+			self.m = N.sum(qnets)/(h_out-h_in)
+
+			#FIXME: need a more reliable convergence insurance
+			if self.m < 0.01:
+				print 'bad_geom'
+				return 'bad_geom'
+
+			# Re-evaluate enthalpies:
+			for i in xrange(1,len(hs_p)):
+				hs_p[i] = hs_p[i-1]+(qnets[i-1])/self.m
+
+			# Evaluate convergence:
+			conv_h = N.abs((self.h-hs_p)/self.h)
+			self.h = (self.h+hs_p)/2.
+
 		# Get the tube elements properties:
-		self.p = ps_p
 		self.uconv = (uconv[1:]+uconv[:-1])/2.
 
 		# Get temperatures from enthalpies via Freesteam
@@ -458,21 +464,11 @@ class TwoNparamcav(Assembly):
 
 		self.T_wall_in = self.T_guess_fluid + qnets*(Rconv)
 
-		qpass = self.bin_abs[~active[1:]]+emissions_guess[~active[1:]]
-		T_guess_wall[~active[1:]] = (qpass/self.areas[~active[1:]]/(self.emsReceiver[~active[1:]]*5.67e-8))**0.25
-		#print 'T fluid:', self.T_guess_fluid 
-		#print 'T wall:', T_guess_wall
 		self.T_guess = T_guess_wall
 		self.tube_positions = tube_positions
-		#print 'T final', self.T_guess
+		self.Q_conv_loss = Qconvloss
+
 		assert (self.T_guess==float('inf')).any()==False, str(self.T_guess)+str(T_guess_wall)+str(emissions_guess)+str(self.m)+str([self.apertureRadius, self.frustaRadii, self.frustaDepths, self.coneDepth])
-
-		self.rad_passive = None
-		if passive != None:
-			self.rad_passive = N.zeros(N.shape(self.bin_abs))
-			self.rad_passive.fill(N.nan)
-			self.rad_passive[passive] = self.bin_abs[passive]
-
 		return 'good_geom'
 
 	def emi_sim(self, Tamb, Trec, VF, areas, inc_radiation=None):
@@ -502,11 +498,8 @@ class TwoNparamcav(Assembly):
 		self.q = q
 		self.Q = Q
 		self.T = T	
-		self.emissive_losses = -self.Q[0]
 
-		return self.emissive_losses
-
-	def energy_balance(self, Tamb, Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, coating_thickness = 45e-6, coating_conductivity = 1.2, tube_roughness=45e-6, passive = None):
+	def energy_balance(self, Tamb, Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, coating_thickness = 45e-6, coating_conductivity = 1.2, tube_roughness=45e-6, uconvloss=30., passive = None):
 		'''
 		Method to simulate the radiative efficiency of a Two_N_parameters_cavity receiver with a realistic evaluation of the temepratures of the walls using fluid properties and the heat exchange model from the temperature_guess() method.
 
@@ -532,19 +525,30 @@ class TwoNparamcav(Assembly):
 		emissions = N.ones(len(self.areas))
 		convergence = N.ones(len(emissions))
 
-		while (convergence>0.0001).any():
-			result_T_guess = self.temperature_guess(Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions[1:], coating_thickness, coating_conductivity, tube_roughness, passive)
+		self.T = N.ones(len(self.areas))*Trec_in
+		self.T[0] = Tamb
+
+		while (convergence>0.00001).any():
+
+			result_T_guess = self.temperature_guess(Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions[1:], coating_thickness, coating_conductivity, tube_roughness, uconvloss, passive)
 
 			if result_T_guess == 'bad_geom': # discard 'bad_geom' geometries.
 
 				self.T_guess = N.ones(len(self.areas))*Trec_in
 				break
 
-			self.emi_sim(Tamb, self.T_guess, VF=self.VF, areas=self.areas, inc_radiation=self.rad_passive)
+			self.rad_passive = None
+			if passive != None:
+				self.rad_passive = N.zeros(N.shape(self.bin_abs))
+				self.rad_passive.fill(N.nan)
+				self.rad_passive[passive] = (self.bin_abs[passive]-self.Q_conv_loss[passive])/self.areas[1:][passive]
+				self.T_guess[passive] = N.nan
+
+			self.emi_sim(Tamb=Tamb, Trec=self.T_guess, VF=self.VF, areas=self.areas, inc_radiation=self.rad_passive)
 			self.T_guess = self.T
 			self.T_fluid = self.T_guess_fluid
 			convergence = N.abs((self.Q-emissions)/self.Q)
 			emissions = (self.Q+emissions)/2.
-			#print emissions
+
 		print 'Final T guess:', self.T_guess
 		return result_T_guess

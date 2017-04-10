@@ -16,7 +16,7 @@ class TracerEngineMP(TracerEngine):
 
 	Not the cleanest or finest implementation. Could be blended with the original engine and use the very same api. It works.
 	'''
-	def multi_ray_sim(self, sources, procs=8, minener=1e-10, reps=1000 , tree=True):
+	def multi_ray_sim(self, sources, procs=8, minener=1e-10, reps=1000, tree=True):
 		self.minener = minener # minimum energy threshold
 		self.reps = reps # stop iteration after this many ray bundles were generated (i.e. 
 					# after the original rays intersected some surface this many times).
@@ -103,15 +103,16 @@ class TracerEngineMP(TracerEngine):
 			for o in xrange(len(asm_objs)):
 				surfs_object = asm_objs[o].get_surfaces()
 				for s in xrange(len(surfs_object)):
-					if k != '_opt':
-						if len(surfs_object[s]._opt.__dict__[k]):
-							if k == '_absorbed':
-								self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.hstack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
-							else:	
-								self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.column_stack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
-						else:
-							self._asm._objects[o].surfaces[s]._opt.__dict__[k] = []	
-					#print 'general assembly',' object ', o,' surface ', s,' number of rays: ', len(self._asm._objects[o].surfaces[s].get_optics_manager().get_all_hits()[0])
+					for k in surfs_object[s]._opt.__dict__.keys():
+						if k != '_opt':
+							if len(surfs_object[s]._opt.__dict__[k]):
+								if k == '_absorbed':
+									self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.hstack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
+								else:	
+									self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.column_stack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
+							else:
+								self._asm._objects[o].surfaces[s]._opt.__dict__[k] = []	
+						#print 'general assembly',' object ', o,' surface ', s,' number of rays: ', len(self._asm._objects[o].surfaces[s].get_optics_manager().get_all_hits()[0])
 		del resm
 		timepost2 = time.clock()-timepost
 		#print 'Post processing reassociation time: ', timepost2,'s'

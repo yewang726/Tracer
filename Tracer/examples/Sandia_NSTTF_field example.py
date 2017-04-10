@@ -4,8 +4,6 @@ A tower/heliostat field example.
 Imports the coordinaes of the Sandia NSTTF facility.
 
 Blocking and shading are identified while ray-traciong and stored for each heliostat in respective blocking and shading arrays.
-
-
 '''
 from tracer.CoIn_rendering.rendering import *
 
@@ -25,15 +23,16 @@ import time
 from scipy.constants import degree
 import math
 import matplotlib.pyplot as plt
+import pickle
 
 
 class TowerScene():
 
 	# Location of the sun:
 	sun_az = 0
-	sun_elev = 34.96
+	sun_zenith = 35.05 #34.96
 
-	sun_vec = solar_vector(sun_az*degree, sun_elev*degree)
+	sun_vec = solar_vector(sun_az*degree, sun_zenith*degree)
 	hstat_normals = N.zeros((218,3))
 	
 	# import custom coordinate file
@@ -60,7 +59,7 @@ class TowerScene():
 
 	def gen_rays(self, num_rays, flux=1000.):
 		#========================
-		individual_source = True
+		individual_source = False
 		#========================
 
 		if individual_source:
@@ -73,7 +72,8 @@ class TowerScene():
 			num_surfs = self.pos.shape[0]
 			for i in xrange(num_surfs):
 				centre = N.c_[50 * self.sun_vec + self.pos[i]]
-				rayb = solar_disk_bundle(num_rays/num_surfs, centre, direction, radius, 4.65e-3, flux)
+				#rayb = solar_disk_bundle(num_rays/num_surfs, centre, direction, radius, 4.65e-3, flux)
+				rayb = buie_sunshape(num_rays/num_surfs, centre, direction, radius, CSR=0.01, flux=flux)	
 				ray_list.append(rayb)
 
 			rays = concatenate_rays(ray_list)
@@ -88,45 +88,31 @@ class TowerScene():
 			centre = N.c_[300*self.sun_vec + self.field_centre]
 			direction = N.array(-self.sun_vec)
 
-			rays = solar_disk_bundle(num_rays, centre, direction, radius, 4.65e-3, flux)
+			#rays = solar_disk_bundle(num_rays, centre, direction, radius, 4.65e-3, flux)
+			rays = buie_sunshape(num_rays, centre, direction, radius, CSR=0.01, flux=flux, pre_process_CSR=False)	
 				
 		return rays
 	
-	def gen_plant(self):
+	def gen_plant(self, width=6.1, height=6.1, absorptivity=0.04, aim_height=60.,  sigma_xy=1e-3, rec_w=11., rec_h=11.):
 
-		# set heliostat field characteristics: 6.09m*6.09m, abs = 0, aim_h = 61
-		self.pos[:,1] = self.pos[:,1]-4. # correct6ion for the true position of the plate on the tower.
-		self.field = HeliostatField(self.pos, 6.09, 6.09, absorptivity=0.04, aim_height=60,  sigma_xy=1e-3, option=None)
-		self.rec_w = 11
-		self.rec_h = 11
-		self.rec, recobj = one_sided_receiver(self.rec_w, self.rec_h)
+		self.pos[:,1] = self.pos[:,1]-4. # correction for the true position of the plate on the tower.
+		self.width = width
+		self.height = height
+		self.absorptivity = absorptivity
+		self.field = HeliostatField(self.pos, width, height, absorptivity, aim_height,  sigma_xy)
+		self.rec_w = rec_w
+		self.rec_h = rec_h
+		rec, recobj = one_sided_receiver(self.rec_w, self.rec_h)
 		rec_trans = rotx(N.pi/-2)
 		rec_trans[2,3] = self.field._th
 
-		#=================
-		ground_rec = False
-		#=================
-
-		if ground_rec:
-			# Evaluating missed rays in the field along with receiver
-			radius = 1.10 * math.sqrt((self.x_dist/2)**2 + (self.y_dist/2)**2)
-			self.ground_rec, ground_recobj = one_sided_receiver(3*radius, 3*radius)
-
-			ground_rec_trans = rotz(0)
-			ground_rec_trans[0,3] = self.field_centre[0]
-			ground_rec_trans[1,3] = self.field_centre[1]
-			
-			recobj.set_transform(rec_trans)
-			ground_recobj.set_transform(ground_rec_trans)
-			self.plant = Assembly(objects=[recobj, ground_recobj], subassemblies=[self.field])
-		else:
-			# Evaluating just the receiver
-			recobj.set_transform(rec_trans)
-		
-			self.plant = Assembly(objects=[recobj], subassemblies=[self.field])	  
+		# Evaluating just the receiver
+		recobj.set_transform(rec_trans)
+	
+		self.plant = Assembly(objects=[recobj], subassemblies=[self.field])	  
 	
 	def aim_field(self):
-		hstat_az, hstat_elev = self.field.aim_to_sun(self.sun_az*degree, self.sun_elev*degree)
+		hstat_az, hstat_elev = self.field.aim_to_sun(self.sun_az*degree, self.sun_zenith*degree)
 
 		return hstat_az, hstat_elev
 
@@ -144,9 +130,9 @@ class TowerScene():
 		
 		self.hstat_proj_areas = [0]*len(self.pos)
 		for i in xrange(len(self.pos)):
-			self.hstat_proj_areas[i] = (6.09**2) * abs(N.dot(-self.sun_vec, self.hstat_normals[i]))
+			self.hstat_proj_areas[i] = (6.1**2) * abs(N.dot(-self.sun_vec, self.hstat_normals[i]))
 	
-	def trace(self):
+	def trace(self, num_rays=1e5, nbins_w=50., nbins_h=50.):
 		'''
 		Raytrace method.
 
@@ -160,11 +146,10 @@ class TowerScene():
 		render = False
 		#=============
 		
-		sun_vec = solar_vector(self.sun_az*degree, self.sun_elev*degree)
+		sun_vec = solar_vector(self.sun_az*degree, self.sun_zenith*degree)
 		
-		# Generate the following number of rays
-		num_rays = 500000.
-		iters = 40
+		bundlesize = 1e4
+		iters = int(num_rays/bundlesize)
 
 		# Results bins:
 		incoming = N.zeros(len(self.pos))
@@ -186,31 +171,37 @@ class TowerScene():
 		timer_postprocess = 0.
 
 		# Receiver bins:
-		dl=11./50.
-		bins = N.arange(-5.5,5.5+dl, dl)
-		fluxmap = N.zeros((len(bins)-1,len(bins)-1))
+
+		dlw = self.rec_w/nbins_w
+		dlh = self.rec_h/nbins_h
+		bins_w = N.arange(-self.rec_w/2.,self.rec_w/2.+dlw, dlw)
+		bins_h = N.arange(-self.rec_h/2.,self.rec_h/2.+dlh, dlh)
+		bins = [bins_w, bins_h]
+		self.bins = bins
+		fluxmap = N.zeros((len(bins_w)-1,len(bins_h)-1))
 
 		# Raytrace:
 		mcrt = time.clock()
 		e = TracerEngineMP(self.plant)
-		procs = 8
+		procs = 1
 		e.minener = 1e-10
 		timer_mcrt += time.clock()-mcrt
 		hits_helios=0
 		i=0
 
-		#while hits_helios < 20e6:
-		for i in xrange(iters):
+		#while hits_helios < num_rays:
+		for i in xrange(iters):			
 			print ' '
 			print ' '
-			print 'ITERATION ', i+1#, ' of ', iters 
+			print 'ITERATION ', i+1, ' of ', iters 
+			#print hits_helios, 'hits out of ', num_rays
 			mcrt = time.clock()
 			# Perform the trace:
 			sources = []
 			self.flux = 1000.
 			for s in xrange(procs):
-				sources.append(self.gen_rays(num_rays/float(procs), flux=self.flux/float(procs)))
-			e.multi_ray_sim(sources, procs)
+				sources.append(self.gen_rays(num_rays=bundlesize/float(procs), flux=self.flux/float(procs)))
+			e.multi_ray_sim(sources=sources, procs=procs)
 			self.plant = e._asm
 			self.field._heliostats = self.plant._assemblies[0].get_surfaces()
 			self.rec = self.plant._objects[0].get_surfaces()[0]
@@ -229,15 +220,15 @@ class TowerScene():
 
 			# FLUX MAP OPERATIONS
 			#===========================================================================
-			H, xbins, ybins = N.histogram2d(x, y, bins, weights=en)
+			H, xbins, ybins = N.histogram2d(x, y, bins, weights=en/(dlw*dlh)*1e-3)
 			extent = [ybins[0], ybins[-1], xbins[-1], xbins[0]]
 
-			fluxmap = (fluxmap*float(i)+H/(1000.*dl**2.))/(i+1.)
+			fluxmap = (fluxmap*float(i)+H)/(i+1.)
 			#===========================================================================
 		
 			# BLOCKAGE and SHADING
 			#===========================================================================
-			# Detect blockage and look for the parents of the blocked rays. Identify from which heliostats teh oarents come and associate the blockage losses to the heliostats where blockage is suffered.
+			# Detect blockage and look for the parents of the blocked rays. Identify from which heliostats the parents come and associate the blockage losses to the heliostats where blockage is suffered.
 			
 			hz = (e.tree._bunds[1].get_vertices()[2]) < (self.field._th-self.rec_h/2.)
 			hits_helios += N.sum(hz)
@@ -297,7 +288,7 @@ class TowerScene():
 				prev_shading[h] = shading[h]
 				# Monte-Carlo sampling:
 				shading[h] = (shading[h]*i+self.flux*self.hstat_proj_areas[h]-incoming[h])/(i+1.)
-				
+	
 			# Streamlined stats variable:
 			incoming_Q = incoming_Q+i/(i+1.)*(incoming-prev_incoming)**2.
 			blocking_Q = blocking_Q+i/(i+1.)*(blocking-prev_blocking)**2.
@@ -328,49 +319,18 @@ class TowerScene():
 			for clear in xrange(len(e._asm.get_surfaces())):
 				e._asm.get_surfaces()[clear].get_optics_manager().reset()
 			#===========================================================================
-		'''
-		plt.figure(figsize=(6,8), dpi=1000)
-		plt.suptitle('%s rays'%int((i+1)*num_rays))
+			del(self.plant)
+		results = {'positions':self.pos, 'blocking':blocking, 'blocking_stdev':blocking_stdev, 'shading':shading, 'shading_stdev':shading_stdev, 'incoming':incoming, 'incoming_stdev':incoming_stdev, 'fluxmap':fluxmap, 'extent':extent, 'width':self.width, 'height':self.height, 'absorptivity':self.absorptivity, 'rec_width':self.rec_w, 'rec_height':self.rec_h, 'rec_bins':self.bins}
+		filesave = open('/home/charles/Documents/Boulot/These/Heliostat field/Sandia_data','w')
+		pickle.dump(results, filesave)
+		filesave.close()
 
-		plt.subplot(311, aspect='equal')
-		plt.title('Blocking')
-		plt.scatter(x=self.pos[:,0], y=self.pos[:,1], s=10, c=blocking/1000., marker='s', linewidths=0, zorder=1000)
-		plt.colorbar()
-		plt.scatter(x=self.pos[:,0], y=self.pos[:,1], c=3.*blocking_stdev/1000., s=40, marker='s', linewidths=0, cmap=plt.cm.gray)
-		plt.colorbar()
-
-		plt.subplot(312, aspect='equal')
-		plt.title('Shading')
-		plt.scatter(x=self.pos[:,0], y=self.pos[:,1], s=10, c=shading/1000., marker='s', linewidths=0, zorder=1000)
-		plt.colorbar()
-		plt.scatter(x=self.pos[:,0], y=self.pos[:,1], c=3.*shading_stdev/1000., s=40, marker='s', linewidths=0, cmap=plt.cm.gray)
-		plt.colorbar()
-
-		plt.subplot(313, aspect='equal')
-		plt.title('Incoming')
-		plt.scatter(x=self.pos[:,0], y=self.pos[:,1], s=10, c=incoming/1000., marker='s', linewidths=0, zorder=1000)
-		plt.colorbar()
-		plt.scatter(x=self.pos[:,0], y=self.pos[:,1], c=3.*incoming_stdev/1000., s=40, marker='s', linewidths=0, cmap=plt.cm.gray)
-		plt.colorbar().set_label('Flux (kW)')
-		plt.savefig(open('/home/charles/Documents/Boulot/These/Heliostat field/heliostats_losses.png', 'w'), dpi=1000)
-
-		plt.figure(dpi=1000)
-		# Flux map configuration
-		plt.imshow(fluxmap, extent=extent, vmax=170.)
-		plt.colorbar().set_label('Flux (kW)')
-		plt.xlabel('x (m)')
-		plt.ylabel('y (m)')
-		plt.title('%s rays'%((i+1)*num_rays))
-		plt.savefig(open('/home/charles/Documents/Boulot/These/Heliostat field/receiver_fluxmap.png', 'w'))
-
-		plt.close('all')
-		'''
 if __name__ == '__main__':
 	scene = TowerScene()
 	hstat_az, hstat_elev = scene.aim_field()
 	scene.calculate_area(hstat_az, hstat_elev)
 	total_time = time.time()
-	scene.trace()
+	scene.trace(num_rays=20000000.)
 	total_time = time.time()-total_time
 	print 'Simulation total time: ', total_time/60., 'min'
 

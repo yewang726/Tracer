@@ -203,7 +203,7 @@ class ConicalFrustum(InfiniteCone):
         # Checks if the local_z-projected hit coords are in the actual height of the furstum
         # and if the parameter is positive so that the ray goes ahead.
         inside = (self.z1 <= height) & (height <= self.z2)
-        positive = prm > 1e-9
+        positive = prm > 1e-6
         hitting = inside & positive
 
         # Choses between the two intersections offered by the surface.

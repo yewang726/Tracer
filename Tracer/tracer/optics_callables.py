@@ -24,7 +24,7 @@ class Reflective(object):
         outg = rays.inherit(selector,
             vertices=geometry.get_intersection_points_global(),
             direction=optics.reflections(rays.get_directions()[:,selector], geometry.get_normals()),
-            energy=rays.get_energy()[selector]*(1 - self._abs),
+            energy=rays.get_energy()[selector]*(1. - self._abs),
             parents=selector)
         return outg
 
@@ -50,9 +50,17 @@ class RealReflective(object):
         ideal_normals = geometry.get_normals()
 
         # Creates projection of error_normal on the surface (sin can be avoided because of very small angles).
-        normal_errors_x = N.sin(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
-        normal_errors_y = N.sin(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
-        normal_errors_z = N.ones(N.shape(ideal_normals[1])) #N.zeros(N.shape(ideal_normals[1]))
+
+        tanx = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+        tany = N.tan(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+
+        normal_errors_z = (1./(1.+tanx**2.+tany**2.))**0.5
+        normal_errors_x = tanx*normal_errors_z
+        normal_errors_y = tany*normal_errors_z
+
+        #normal_errors_x = N.sin(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+        #normal_errors_y = N.sin(N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1])))
+        #normal_errors_z = N.ones(N.shape(ideal_normals[1])) #N.zeros(N.shape(ideal_normals[1]))
         normal_errors = N.vstack((normal_errors_x, normal_errors_y, normal_errors_z))
 
         # Determine rotation matrices for each normal:
@@ -271,7 +279,7 @@ class RealReflective_OneSide(RealReflective):
         outg = RealReflective.__call__(self, geometry, rays, selector)
         energy = outg.get_energy()
         proj = N.sum(rays.get_directions()[:,selector]*geometry.up()[:,None], axis = 0)
-        energy[proj > 0] = 0 # projection up - set energy to zero
+        energy[proj > 0.] = 0. # projection up - set energy to zero
         outg.set_energy(energy) #substitute previous step into ray energy array
         return outg
         
