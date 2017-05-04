@@ -236,7 +236,7 @@ class RealReflectiveReceiver(AbsorptionAccountant):
         AbsorptionAccountant.__init__(self, RealReflective, absorptivity, sigma_xy)
 
 class RealReflectiveReceiver_OneSide(AbsorptionAccountant):
-    """A wrapper around AbsorptionAccountant with a RealReflective_OneSide optics"""
+    """A wrapper around AbsorptionAccountant wtoith a RealReflective_OneSide optics"""
     def __init__(self, absorptivity=0, sigma_xy=0):
         AbsorptionAccountant.__init__(self, RealReflective_OneSide, absorptivity, sigma_xy)
 
