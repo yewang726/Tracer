@@ -258,10 +258,10 @@ def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_proce
 
     # Discrete random ray directions generation according to Buie sunshape
     # Step 1: integration over the whole Sunshape: 
-    nelem = 210
+    nelem = 210.
 
-    theta_int = N.arange(0., theta_dni*1000.*(1.+1./nelem), theta_dni*1000./nelem)
-    phi_dni_int = N.sin(theta_int/1000.)*N.cos(0.326*theta_int)/N.cos(0.308*theta_int)
+    theta_int = N.arange(0., theta_dni*(1.+1./nelem), theta_dni/nelem)
+    phi_dni_int = N.sin(theta_int)*N.cos(0.326*theta_int*1e3)/N.cos(0.308*theta_int*1e3)
     integ_phi_dni = theta_dni/nelem/2.*(phi_dni_int[:-1]+phi_dni_int[1:])
 
     if CSR == 0.:
@@ -278,15 +278,16 @@ def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_proce
         integ_phi_csr = 1e-6*N.exp(kappa)/(gamma+2.)*((theta_tot*1000.)**(gamma+2.)-(theta_dni*1000.)**(gamma+2.))
         integ_phi = N.sum(integ_phi_dni)+integ_phi_csr
 
-    # Step 2: PDF and random variate declaration
+    # Step 2: pdf-cdf and random variate declaration
     integ_pdf_dni = integ_phi_dni/integ_phi
+    integ_cdf_dni = N.add.accumulate(N.hstack(([0],integ_pdf_dni)))
     R_thetas = N.random.uniform(size=num_rays)
 
     # Step 3: polar angle determination: 
-    aureole = R_thetas>=N.sum(integ_pdf_dni)
-    for i in xrange(len(integ_pdf_dni)-1):
-        dni_slice = N.logical_and((R_thetas >= N.sum(integ_pdf_dni[:i])), (R_thetas < N.sum(integ_pdf_dni[:i+1])))
-        thetas[dni_slice] = theta_int[i]/1000.+N.random.uniform(size=N.sum(dni_slice))*theta_dni/nelem.
+    aureole = R_thetas >= integ_cdf_dni[-1]
+    for i in xrange(len(integ_cdf_dni)-1):
+        dni_slice = N.logical_and((R_thetas >= integ_cdf_dni[i]), (R_thetas < integ_cdf_dni[i+1]))
+        thetas[dni_slice] = theta_int[i]+N.random.uniform(size=N.sum(dni_slice))*theta_dni/nelem
 
     if CSR>0.:
         thetas[aureole] = ((R_thetas[aureole]-1.)*((gamma+2.)/(10.**(3.*gamma)*N.exp(kappa))*N.sum(integ_phi_dni)-theta_dni**(gamma+2.))+R_thetas[aureole]*theta_tot**(gamma+2.))**(1./(gamma+2.))
@@ -306,7 +307,7 @@ def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_proce
     
     rayb = RayBundle(vertices = vertices_global+center, directions = directions, energy = energy)
 
-    return rayb#, thetas
+    return rayb
 
 def square_bundle(num_rays, center, direction, width):
     """
