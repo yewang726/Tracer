@@ -103,10 +103,10 @@ class RTVF():
 		self.progress = N.logical_not(N.logical_and(summ_test, N.logical_and(stdev_test, reciprocity_test)))
 
 		print self.precision_option
-		print 'Progress:', N.ravel(N.argwhere((self.progress==True).any(axis=1)))
-		print 'Stdev:', N.ravel(N.argwhere((stdev_test==False).any(axis=1)))
-		print 'Reciprocity:', N.ravel(N.argwhere((reciprocity_test==False).any(axis=1)))
-		print 'Summation:', N.ravel(N.argwhere((summ_test==False).any(axis=1)))
+		#print 'Progress:', N.hstack(N.argwhere((self.progress==True).any(axis=1)))
+		#print 'Stdev:', N.hstack(N.argwhere((stdev_test==False).any(axis=1)))
+		#print 'Reciprocity:', N.hstack(N.argwhere((reciprocity_test==False).any(axis=1)))
+		#print 'Summation:', N.hstack(N.argwhere((summ_test==False).any(axis=1)))
 		'''
 		for f in xrange(N.shape(AiFij)[0]):
 			if (reciprocity_test[f]==False).any():

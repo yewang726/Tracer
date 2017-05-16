@@ -11,7 +11,7 @@ def Two_N_parameters_RTVF(apertureRadius, frustaRadii, frustaDepths, coneDepth, 
 #VFx = Two_N_parameters_cavity_RTVF(1., [2.5,1.5,1.], [0.5,1.5,1.], 0.4, [4,4,4], 1, num_rays=15000, precision=0.005).VF_esperance
 #VFx = Cylinder_cavity_RTVF(1e-2, 1e-2, [1e-2,1e-2,1e-2], num_rays=100, precision=0.001).VF_estimator
 
-rec = FONaR(radii, heights, envelope_thickness, absorptivity_absorber, emissivity_absorber, absorptivity_envelope, emissivity_envelope, location=None, rotation=None)
+#rec = FONaR(radii, heights, envelope_thickness, absorptivity_absorber, emissivity_absorber, absorptivity_envelope, emissivity_envelope, location=None, rotation=None)
 vfs = rec.VF_sim(num_rays=5000, precision=0.05)
 
 #plt.show()
