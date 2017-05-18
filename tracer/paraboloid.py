@@ -110,7 +110,7 @@ class ParabolicDishGM(Paraboloid):
         coords = N.concatenate((coords, N.ones((2,1,coords.shape[2]))), axis=1)
         local_z = N.sum(N.linalg.inv(self._working_frame)[None,2,:,None]*coords, axis=1)
 
-        under_cut = (local_z <= self._h) & (local_z >= 1e-6)
+        under_cut = (local_z <= self._h) & (local_z >= 0)
         hitting = under_cut & positive
 
         select[N.logical_and(*hitting)] = 1
@@ -192,7 +192,7 @@ class HexagonalParabolicDishGM(Paraboloid):
         abs_y = abs(local[:,1,:])
         outside = abs_x > N.sqrt(3)*self._R/2.
         outside |= abs_y > self._R - N.tan(N.pi/6.)*abs_x
-        inside = (~outside) & (prm > 1e-6)
+        inside = (~outside) & (prm > 0)
         
         select[~N.logical_or(*inside)] = N.nan
         one_hit = N.logical_xor(*inside)

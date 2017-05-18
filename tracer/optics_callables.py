@@ -300,6 +300,7 @@ class RefractiveHomogenous(object):
             ref_index=n2[refr])
         
         return reflected_rays + refracted_rays
+        
 
 class LambertianReflector(object):
     """
@@ -331,7 +332,7 @@ class LambertianReflector(object):
 
 class LambertianReceiver(AbsorptionAccountant):
     """A wrapper around AbsorptionAccountant with LambertianReflector optics"""
-    def __init__(self, absorptivity=0.):
+    def __init__(self, absorptivity=1.):
         AbsorptionAccountant.__init__(self, LambertianReflector, absorptivity)
 
 class LambertianDetector(DirectionAccountant):

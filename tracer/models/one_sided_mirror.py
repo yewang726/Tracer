@@ -45,11 +45,12 @@ def rect_one_sided_mirror(width, height, absorptivity=0, sigma_xy=None, location
 	else:
 		opticall = opt.AbsorberRealReflector(absorptivity, sigma_xy)
 
-	surf = Surface(RectPlateGM(height, width), opticall, location=location, rotation=rotation)
+	surf = Surface(RectPlateGM(width, height), opticall, location=location, rotation=rotation)
+	back = Surface(RectPlateGM(width, height), opt.ReflectiveReceiver(1),
+		location=r_[0., 0., -1e-6])
+	obj = AssembledObject(surfs=[surf, back])
 
-	obj = AssembledObject(surfs=[surf])
-
-	#obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj, 			obj.__class__)
+	obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj, 			obj.__class__)
 
 	return obj
 
@@ -69,7 +70,7 @@ def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sig
 		surfaces_for_next_iteration, obj, obj.__class__)
 	return obj
 
-def one_sided_receiver(width, height, absorptivity=0, location=None, rotation=None):
+def one_sided_receiver(width, height, absorptivity=1, location=None, rotation=None):
 	"""
 	construct an object with two surfaces: one on the XY plane, that is
 	specularly reflective, and one slightly below (negative z), that is opaque.

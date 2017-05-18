@@ -126,18 +126,20 @@ class Renderer():
 		
 				if ray in parents:
 					# Has a hit on another surface
-					first_child = N.where(ray == parents)
+					first_childs = N.nonzero(ray == parents)[0]
 					c1 = sv[:,ray]
-					c2 = ev[:,first_child]
+					for cs in first_childs:
+						c2 = ev[:,cs]
+						co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 					#endpoints = N.c_[sv[:,ray], ev[:,first_child]]
 				else:
 					l = escaping_len
-					if level == 0:
-						l = 0.1
+					#if level == 0:
+					#	l = 0.1
 					# Escaping ray.
 					c1 = sv[:,ray]
 					c2 = sv[:,ray] + sd[:,ray]*l
-				co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
+					co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
 		color=(1,1,0.5)
 
