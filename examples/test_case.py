@@ -8,6 +8,8 @@ from tracer.spatial_geometry import rotx
 
 from tracer.models.tau_minidish import MiniDish
 
+from tracer.CoIn_rendering.rendering import Renderer as R
+
 def plot_hits(hist, extent):
     """
     Generates a PyLab plot of the histogrammed hits from a receiver
@@ -48,6 +50,10 @@ def test_case(focus, num_rays=100, h_depth=0.7, side=0.4):
     # Do the tracing:
     engine = TracerEngine(assembly)
     engine.ray_tracer(sun, iterate, min_energy)
+
+	# Render a subset of the total rays:
+    v = R(engine)
+    v.show_rays(max_rays=100)
     
     # Plot, scale in suns:
     f = plot_hits(assembly.histogram_hits()[0]/(side/50)**2/1000., (-side/2., side/2., -side/2., side/2.))
@@ -63,7 +69,7 @@ if __name__ == '__main__':
     parser = optparse.OptionParser(usage=usage)
     parser.add_option('--focus', '-f', dest='foc', type='float', default=6.25,
         help="Dish focal length, default: %default")
-    parser.add_option('--num-rays', '-n', dest='num_rays', type='int', default=100,
+    parser.add_option('--num-rays', '-n', dest='num_rays', type='int', default=1e6,
         help="Number of rays in the initial bundle, default %default")
     parser.add_option('--hdepth', dest='hdepth', type='float', default=0.7,
         help="Homogenizer depth, default %default")
