@@ -206,15 +206,31 @@ class RectPlateGM(FiniteFlatGM):
         """
         if resolution == None:
             resolution = 40
-        points = N.ceil(resolution*self._half_dims.reshape(-1)*2)
-        points[points < 2] = 2 # At least the edges of the range.
-        xs = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], points[0])
-        ys = N.linspace(-self._half_dims[1,0], self._half_dims[1,0], points[1])
+        #points = N.ceil(resolution*self._half_dims.reshape(-1)*2)
+        #points[points < 2] = 2 # At least the edges of the range.
+        xs = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], resolution+1)
+        ys = N.linspace(-self._half_dims[1,0], self._half_dims[1,0], resolution+1)
         
         x, y = N.broadcast_arrays(xs[:,None], ys)
         z = N.zeros_like(x)
-       # print(">>> rect plate", x, y, z)
+
         return x, y, z
+
+    def get_fluxmap(self, eners, local_coords, resolution):
+        '''
+        Cartesian mesh for flat rectangular surfaces
+        '''
+        xs = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], resolution+1)
+        ys = N.linspace(-self._half_dims[1,0], self._half_dims[1,0], resolution+1)
+
+        eners = N.histogram2d(local_coords[0], local_coords[1], bins=[xs, ys], weights=eners)[0]
+        dxs = N.tile(N.abs(xs[1:]-xs[:-1]), (len(ys)-1,1))
+        dys = N.tile(N.abs(ys[1:]-ys[:-1]), (len(xs)-1,1)).T
+        areas = dxs*dys
+        
+        flux = eners/areas
+        
+        return N.hstack(flux)
 
 class RoundPlateGM(FiniteFlatGM):
     """

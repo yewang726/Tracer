@@ -3,12 +3,16 @@ SOGUI_BINDING="SoQt"
 from pivy.sogui import *
 
 import numpy as N
+import sys
 
 class Renderer():
 	'''	__________________________________________________________________________________________________
 	Rendering:
 
-	Renders the scene. Offers the option to highlight specific rays according to the number of times they have been 	reflected.	__________________________________________________________________________________________________
+	Renders the scene. Offers the option to highlight specific rays according to the number of times they have been 	reflected.
+
+Reference:
+[1] The inventor Mentor, Josie Wernecke (https://webdocs.cs.ualberta.ca/~graphics/books/mentor.pdf)	__________________________________________________________________________________________________
 
 	'''
 	def __init__(self, sim):
@@ -61,8 +65,20 @@ class Renderer():
 			ls.numVertices.setValues(0,1,[2])
 			self.r.addChild(ls)
 
+	def show(self):
+		win = SoGui.init(sys.argv[0])
+		if win == None: sys.exit(1)
+		viewer = SoGuiExaminerViewer(win)
+		from PyQt4 import QtGui
+		bgcol = QtGui.QColor(0,255,255,0)
+		viewer.setBackgroundColor(bgcol)
+		viewer.setSceneGraph(self.r)
+		viewer.setTitle("Examiner Viewer")
+		viewer.show()
+		SoGui.show(win)
+		SoGui.mainLoop()
 
-	def show_geom(self, resolution=None):
+	def geom(self, resolution=None):
 		"""
 		Method to draw the geometry of the scene to a Coin3D scenegraph.
 		"""
@@ -70,19 +86,14 @@ class Renderer():
 		mat = coin.SoMaterial()
 		mat.diffuseColor=(1,.5,.5)
 		nod.addChild(mat)
-
+		self.r.addChild(nod)
 		self.r.addChild(self.sim._asm.get_scene_graph(resolution))
-		win = SoGui.init()
-		viewer = SoGuiExaminerViewer(win)
-		viewer.setSceneGraph(self.r)
 
-		viewer.setTitle("Examiner Viewer")
-		viewer.show()
-		SoGui.show(win)
+	def show_geom(self, resolution=None):
+		self.geom(resolution)
+		self.show()
 
-		SoGui.mainLoop()
-
-	def show_rays(self, escaping_len=.2, max_rays=None, resolution=None):
+	def rays(self, escaping_len=.2, max_rays=None, resolution=None):
 		"""
 		Method to draw the rays to a Coin3D scenegraph. Needs to be called after a raytrace has been peroformed.
 		"""
@@ -168,23 +179,10 @@ class Renderer():
 
 			no.addChild(no1)
 
-		no2 = coin.SoSeparator()
-		mat = coin.SoMaterial()
-		mat.diffuseColor=(1,1,1)
-		no2.addChild(mat)
-		no2.addChild(self.sim._asm.get_scene_graph(resolution))
-		no.addChild(no2)
-
 		self.r.addChild(no)
 
-		win = SoGui.init()	 
-		viewer = SoGuiExaminerViewer(win)
-		from PyQt4 import QtGui
-		bgcol = QtGui.QColor(0,255,255,0)
-		viewer.setBackgroundColor(bgcol)
-		viewer.setSceneGraph(self.r)
-		viewer.setTitle("Examiner Viewer")
+	def show_rays(self, escaping_len=.2, max_rays=None, resolution=None):
+		self.rays(escaping_len, max_rays, resolution)
+		self.geom(resolution)
+		self.show()
 
-		viewer.show()
-		SoGui.show(win)
-		SoGui.mainLoop()

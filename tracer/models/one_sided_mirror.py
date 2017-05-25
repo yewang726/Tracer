@@ -41,16 +41,15 @@ def rect_one_sided_mirror(width, height, absorptivity=0, sigma_xy=None, location
 		not reflected back.
 	"""
 	if sigma_xy == None:
-		opticall = opt.AbsorberReflector(absorptivity)
+		opticall = opt.OneSidedReflectiveReceiver(absorptivity)
 	else:
-		opticall = opt.AbsorberRealReflector(absorptivity, sigma_xy)
+		opticall = opt.OneSidedReflectiveReceiver(absorptivity, sigma_xy)
 
 	surf = Surface(RectPlateGM(width, height), opticall, location=location, rotation=rotation)
-	back = Surface(RectPlateGM(width, height), opt.ReflectiveReceiver(1),
-		location=r_[0., 0., -1e-6])
-	obj = AssembledObject(surfs=[surf, back])
-
-	obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj, 			obj.__class__)
+	#back = Surface(RectPlateGM(width, height), opt.OneSidedReflectiveReceiver(1), location=r_[0., 0., -1e-6])
+	#obj = AssembledObject(surfs=[surf, back])
+	obj = AssembledObject(surfs=[surf])
+	#obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj, 			obj.__class__)
 
 	return obj
 
@@ -88,11 +87,8 @@ def one_sided_receiver(width, height, absorptivity=1, location=None, rotation=No
 	front - the receiving surface
 	obj - the AssembledObject containing both surfaces
 	"""
-	front = Surface(RectPlateGM( height, width), 
-		opt.ReflectiveReceiver(absorptivity))
-	back = Surface(RectPlateGM(width, height), opt.ReflectiveReceiver(1),
-		location=r_[0., 0., -1e-6])
-	obj = AssembledObject(surfs=[front, back])
-	obj.surfaces_for_next_iteration = types.MethodType(
-		surfaces_for_next_iteration, obj, obj.__class__)
-	return front, obj
+	front = Surface(RectPlateGM(width, height), opt.OneSidedReflectiveReceiver(absorptivity))
+
+	obj = AssembledObject(surfs=[front])
+	
+	return obj

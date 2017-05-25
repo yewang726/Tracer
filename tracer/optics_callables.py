@@ -183,28 +183,38 @@ class ReflectiveDetector(DirectionAccountant):
     """A wrapper around DirectionAccountant with a Reflective optics"""
     def __init__(self, absorptivity=0):
         DirectionAccountant.__init__(self, Reflective, absorptivity)
+        
+class OneSidedReflectiveReceiver(AbsorptionAccountant):
+    """A wrapper around AbsorptionAccountant with a Reflective optics"""
+    def __init__(self, absorptivity=1):
+        AbsorptionAccountant.__init__(self, OneSidedReflective, absorptivity)
+
+class OneSidedReflectiveDetector(DirectionAccountant):
+    """A wrapper around DirectionAccountant with a Reflective optics"""
+    def __init__(self, absorptivity=0):
+        DirectionAccountant.__init__(self, OneSidedReflective, absorptivity)
 
 class RealReflectiveReceiver(AbsorptionAccountant):
     """A wrapper around AbsorptionAccountant with a RealReflective optics"""
     def __init__(self, absorptivity=0, sigma_xy=0):
         AbsorptionAccountant.__init__(self, RealReflective, absorptivity, sigma_xy)
-
-class RealReflectiveReceiver_OneSide(AbsorptionAccountant):
-    """A wrapper around AbsorptionAccountant wtoith a RealReflective_OneSide optics"""
-    def __init__(self, absorptivity=0, sigma_xy=0):
-        AbsorptionAccountant.__init__(self, RealReflective_OneSide, absorptivity, sigma_xy)
-
+        
 class RealReflectiveDetector(DirectionAccountant):
     """A wrapper around DirectionAccountant with a RealReflective optics"""
     def __init__(self, absorptivity=0, sigma_xy=0):
         DirectionAccountant.__init__(self, RealReflective, absorptivity, sigma_xy)
 
-class RealReflectiveDetector_OneSide(DirectionAccountant):
-    """A wrapper around DirectionAccountant with a RealReflective_OneSide optics"""
+class OneSidedRealReflectiveReceiver(AbsorptionAccountant):
+    """A wrapper around AbsorptionAccountant with a AbsorberRealReflector optics"""
     def __init__(self, absorptivity=0, sigma_xy=0):
-        DirectionAccountant.__init__(self, RealReflective_OneSide, absorptivity, sigma_xy)
+        AbsorptionAccountant.__init__(self, OneSidedRealReflective, absorptivity, sigma_xy)
+
+class OneSidedRealReflectiveDetector(DirectionAccountant):
+    """A wrapper around DirectionAccountant with AbsorberRealReflector optics"""
+    def __init__(self, absorptivity=0, sigma_xy=0):
+        DirectionAccountant.__init__(self, OneSidedRealReflective, absorptivity, sigma_xy)
         
-class AbsorberReflector(Reflective):
+class OneSidedReflective(Reflective):
     """
     This optics manager behaves similarly to the ReflectiveReceiver class,
     but adds directionality. In this way a simple one-side receiver doesn't
@@ -223,7 +233,7 @@ class AbsorberReflector(Reflective):
         outg.set_energy(energy)
         return outg
 
-class AbsorberRealReflector(RealReflective):
+class OneSidedRealReflective(RealReflective):
     """
     Adds directionality to an optics manager that is modelled to represent the
     optics of an opaque absorptive surface with specular reflections and realistic
