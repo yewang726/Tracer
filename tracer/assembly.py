@@ -131,13 +131,13 @@ class Assembly(HasFrame):
         for obj in self._assemblies + self._objects:
             obj.transform_children(N.dot(assembly_transform, const_t))
 
-    def get_scene_graph(self,resolution):
+    def get_scene_graph(self,resolution, fluxmap, trans, vmin, vmax):
         n = self.get_scene_graph_transform()
 
         for obj in self._assemblies:
-            n.addChild(obj.get_scene_graph(resolution))
+            n.addChild(obj.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
         for obj in self._objects:
-            n.addChild(obj.get_scene_graph(resolution))
+            n.addChild(obj.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
         return n
 
 # vim: et:ts=4

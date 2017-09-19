@@ -59,6 +59,9 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 	
 	if (N.isnan(bb).any()):
 		raise AttributeError('Wrong left hand side')
+	if N.isnan(AA).any():
+		print AA
+		stop
 
 	# Matrix inversion:
 	J = N.linalg.solve(AA, bb)
@@ -84,4 +87,4 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 	Q = A*q #(W)
 
 	return AA,bb,J,E,T,q,Q
-# vim: ts=4 et:
+

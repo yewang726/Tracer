@@ -69,25 +69,6 @@ class GeometryManager(object):
 
 		Prefer to allow objects to calculate a 'suitable' resolution based on size.
 		"""
-		n = coin.SoSeparator()
-		X,Y,Z = self.mesh(resolution)
-		nr,nc = X.shape
-		A = [(X.flat[i],Y.flat[i],Z.flat[i]) for i in range(len(X.flat))]
-		coor = coin.SoCoordinate3()
-		coor.point.setValues(0, len(A), A)
-		n.addChild(coor)
+		return self.mesh(resolution)
 
-		sh = coin.SoShapeHints()
-		sh.shapeType = coin.SoShapeHintsElement.UNKNOWN_SHAPE_TYPE
-		sh.vertexOrdering = coin.SoShapeHintsElement.COUNTERCLOCKWISE
-		sh.faceType = coin.SoShapeHintsElement.UNKNOWN_FACE_TYPE
-		n.addChild(sh)
 
-		qm = coin.SoQuadMesh()
-		qm.verticesPerRow = nc
-		qm.verticesPerColumn = nr
-		n.addChild(qm)
-
-		return n
-
-# vim: et:ts=4

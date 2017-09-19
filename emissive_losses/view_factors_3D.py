@@ -102,7 +102,6 @@ class RTVF():
 		# Simulation progress switch to determine which surfaces need to cast more rays
 		self.progress = N.logical_not(N.logical_and(summ_test, N.logical_and(stdev_test, reciprocity_test)))
 
-		print self.precision_option
 		#print 'Progress:', N.hstack(N.argwhere((self.progress==True).any(axis=1)))
 		#print 'Stdev:', N.hstack(N.argwhere((stdev_test==False).any(axis=1)))
 		#print 'Reciprocity:', N.hstack(N.argwhere((reciprocity_test==False).any(axis=1)))

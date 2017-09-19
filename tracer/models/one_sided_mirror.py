@@ -29,7 +29,7 @@ def surfaces_for_next_iteration(self, rays, surface_id):
 	"""
 	return N.zeros((len(self.surfaces), rays.get_num_rays()), dtype=N.bool)
 
-def rect_one_sided_mirror(width, height, absorptivity=0, sigma_xy=None, location=None, rotation=None):
+def rect_one_sided_mirror(width, height, absorptivity=0, sigma=None, bi_var=True, location=None, rotation=None):
 	"""
 	construct an object with two surfaces: one on the XY plane, that is
 	specularly reflective, and one slightly below (negative z), that is opaque.
@@ -43,7 +43,7 @@ def rect_one_sided_mirror(width, height, absorptivity=0, sigma_xy=None, location
 	if sigma_xy == None:
 		opticall = opt.OneSidedReflectiveReceiver(absorptivity)
 	else:
-		opticall = opt.OneSidedReflectiveReceiver(absorptivity, sigma_xy)
+		opticall = opt.OneSidedReflectiveReceiver(absorptivity, sigma, bi_var)
 
 	surf = Surface(RectPlateGM(width, height), opticall, location=location, rotation=rotation)
 	#back = Surface(RectPlateGM(width, height), opt.OneSidedReflectiveReceiver(1), location=r_[0., 0., -1e-6])
@@ -54,14 +54,14 @@ def rect_one_sided_mirror(width, height, absorptivity=0, sigma_xy=None, location
 	return obj
 
 
-def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sigma_xy=0., option=None, location=None, rotation=None):
+def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sigma=0., bi_var=True, option=None, location=None, rotation=None):
 
 	if option == 'fast':
 		surf = Surface(RectangularParabolicDishGM(width, height, focal_length),
-				   opt.RealReflective_OneSide(absorptivity, sigma_xy), location=location, rotation=rotation)
+				   opt.OneSidedRealReflective(absorptivity, sigma, bi_var), location=location, rotation=rotation)
 	else:
 		surf = Surface(RectangularParabolicDishGM(width, height, focal_length),
-			opt.RealReflectiveDetector_OneSide(absorptivity, sigma_xy), 							location=location, rotation=rotation)
+			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 
 	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
 	obj = AssembledObject(surfs = [surf])

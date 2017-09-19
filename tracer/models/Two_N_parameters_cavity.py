@@ -31,7 +31,7 @@ class TwoNparamcav(Assembly):
 	- self.sim(): performs a combined simulation of both emissive and reflective losses and returns a global efficiency.
 	- self.reset_opt(): empties the optics_manager bins to reuse the same object in a new ray trace.
 	'''
-	def __init__(self, apertureRadius, frustaRadii, frustaDepths, coneDepth, eps_wall, absReceiver, emsReceiver, aperture_position, envelope_radius = None, envelope_depth = None, specular_receiver=False):
+	def __init__(self, apertureRadius, frustaRadii, frustaDepths, coneDepth, eps_wall, absReceiver, emsReceiver, aperture_position=0., envelope_radius=None, envelope_depth=None):
 		'''
 		Initialisation of the geometry and surface properties of the scene.
 
@@ -46,11 +46,9 @@ class TwoNparamcav(Assembly):
 		- absReceiver: absorptivity of the walls of the cavity in the visible wavelength region. Can be a single value for a constant wall absorptivity or an array/list for a description of absorptivities element per element.
 		- emsReceiver: emissivity of the walls of the cavity in the thermal emissions wavelength region. Can be a single value for a constant wall emissivity or an array/list for a description of emissivities element per element.
 
-		- aperture_position: position of the receiver aperture plane on the z axis, qaxis of symmetry of the receiver and dish in (m).
+		- aperture_position: position of the receiver aperture plane on the z axis, axis of symmetry of the receiver and dish in (m).
 		- envelope_radius: overrides the wall thickness based determination of the cylindrical envelope radius in (m).
 		- envelope_depth: overrides the wall thickness based determination of the cylindrical envelope depth in (m).
-		- specular_receiver: switches teh optics from lambertian to specular for the receiver internal walls.
-
 		'''
 		Assembly.__init__(self, objects=None, subassemblies=None, location=None, rotation=None)
 
@@ -97,39 +95,39 @@ class TwoNparamcav(Assembly):
 		Envelope.add_object(Envelope_cylinder)
 
 		# Receiver inner surface ----------------------------------------
-		if specular_receiver==False:		
-			# Cone
-			if self.coneDepth < 0.: # self.coneDepth < 0 Inward cone
-				CON = AssembledObject(surfs=[Surface(FiniteCone(r=self.frustaRadii[-1], h=-self.coneDepth), LambertianReceiver(self.absReceiver[-1]))], transform=translate(z=N.sum(frustaDepths)+self.coneDepth))
-	
-			elif self.coneDepth == 0.: # Round flat plates
-				CON = AssembledObject(surfs=[Surface(RoundPlateGM(Re=self.frustaRadii[-1]), LambertianReceiver(self.absReceiver[-1]))], transform=translate(z=N.sum(frustaDepths)))
 
-			else:	 # == cone depth > 0: Outgoing cone
-				trc = N.dot(rotx(N.pi), translate(z=-N.sum(frustaDepths)-self.coneDepth)) # Cone frame transformation
-				CON = AssembledObject(surfs=[Surface(FiniteCone(r=self.frustaRadii[-1], h=self.coneDepth), LambertianReceiver(self.absReceiver[-1]))], transform=trc)
+		# Cone
+		if self.coneDepth < 0.: # self.coneDepth < 0 Inward cone
+			CON = AssembledObject(surfs=[Surface(FiniteCone(r=self.frustaRadii[-1], h=-self.coneDepth), LambertianReceiver(self.absReceiver[-1]))], transform=translate(z=N.sum(frustaDepths)+self.coneDepth))
 
-			FRU = []
-			# 1st frustum:
-			if self.apertureRadius==self.frustaRadii[0]: # Cylinder
-				frustum = AssembledObject(surfs=[Surface(FiniteCylinder(diameter=self.apertureRadius*2, height=self.frustaDepths[0]), LambertianReceiver(self.absReceiver[1]))], transform=translate(z=self.frustaDepths[0]/2.))
-			elif self.frustaDepths[0] == 0.:
-				frustum = AssembledObject(surfs=[Surface(RoundPlateGM(Re=self.apertureRadius, Ri=self.frustaRadii[0]), LambertianReceiver(self.absReceiver[1]))], transform=translate(z=N.sum(self.frustaDepths[:i])))
+		elif self.coneDepth == 0.: # Round flat plates
+			CON = AssembledObject(surfs=[Surface(RoundPlateGM(Re=self.frustaRadii[-1]), LambertianReceiver(self.absReceiver[-1]))], transform=translate(z=N.sum(frustaDepths)))
+
+		else:	 # == cone depth > 0: Outgoing cone
+			trc = N.dot(rotx(N.pi), translate(z=-N.sum(frustaDepths)-self.coneDepth)) # Cone frame transformation
+			CON = AssembledObject(surfs=[Surface(FiniteCone(r=self.frustaRadii[-1], h=self.coneDepth), LambertianReceiver(self.absReceiver[-1]))], transform=trc)
+
+		FRU = []
+		# 1st frustum:
+		if self.apertureRadius==self.frustaRadii[0]: # Cylinder
+			frustum = AssembledObject(surfs=[Surface(FiniteCylinder(diameter=self.apertureRadius*2, height=self.frustaDepths[0]), LambertianReceiver(self.absReceiver[1]))], transform=translate(z=self.frustaDepths[0]/2.))
+		elif self.frustaDepths[0] == 0.:
+			frustum = AssembledObject(surfs=[Surface(RoundPlateGM(Re=self.apertureRadius, Ri=self.frustaRadii[0]), LambertianReceiver(self.absReceiver[1]))], transform=translate(z=N.sum(self.frustaDepths[:i])))
+		else:
+			frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.apertureRadius, z2=self.frustaDepths[0], r2=self.frustaRadii[0]), LambertianReceiver(absorptivity=self.absReceiver[1]))], transform=None)
+		FRU.append(frustum)
+		# next frusta:
+		for i in xrange(1,len(frustaRadii)):
+			if self.frustaRadii[i-1]==self.frustaRadii[i]: # Cylinder
+				frustum = AssembledObject(surfs=[Surface(FiniteCylinder(diameter=self.frustaRadii[i-1]*2, height=self.frustaDepths[i]), LambertianReceiver(self.absReceiver[1+i]))], transform=translate(z=N.sum(self.frustaDepths[:i])+self.frustaDepths[i]/2.))
+			elif self.frustaDepths[i] < 0.:
+				frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.frustaRadii[i-1], z2=-self.frustaDepths[i], r2=self.frustaRadii[i]), LambertianReceiver(absorptivity=self.absReceiver[1+i]))], transform=N.dot(translate(z=N.sum(self.frustaDepths[:i])),rotx(N.pi)))
+			elif self.frustaDepths[i] > 0.:
+				frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.frustaRadii[i-1], z2=self.frustaDepths[i], r2=self.frustaRadii[i]), LambertianReceiver(absorptivity=self.absReceiver[1+i]))], transform=translate(z=N.sum(self.frustaDepths[:i])))
 			else:
-				frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.apertureRadius, z2=self.frustaDepths[0], r2=self.frustaRadii[0]), LambertianReceiver(absorptivity=self.absReceiver[1]))], transform=None)
-			FRU.append(frustum)
-			# next frusta:
-			for i in xrange(1,len(frustaRadii)):
-				if self.frustaRadii[i-1]==self.frustaRadii[i]: # Cylinder
-					frustum = AssembledObject(surfs=[Surface(FiniteCylinder(diameter=self.frustaRadii[i-1]*2, height=self.frustaDepths[i]), LambertianReceiver(self.absReceiver[1+i]))], transform=translate(z=N.sum(self.frustaDepths[:i])+self.frustaDepths[i]/2.))
-				elif self.frustaDepths[i] < 0.:
-					frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.frustaRadii[i-1], z2=-self.frustaDepths[i], r2=self.frustaRadii[i]), LambertianReceiver(absorptivity=self.absReceiver[1+i]))], transform=N.dot(translate(z=N.sum(self.frustaDepths[:i])),rotx(N.pi)))
-				elif self.frustaDepths[i] > 0.:
-					frustum = AssembledObject(surfs=[Surface(ConicalFrustum(z1=0., r1=self.frustaRadii[i-1], z2=self.frustaDepths[i], r2=self.frustaRadii[i]), LambertianReceiver(absorptivity=self.absReceiver[1+i]))], transform=translate(z=N.sum(self.frustaDepths[:i])))
-				else:
-					frustum = AssembledObject(surfs=[Surface(RoundPlateGM(Re=self.frustaRadii[i-1], Ri=self.frustaRadii[i]), ReflectiveReceiver(self.absReceiver[-1]))], transform=translate(z=N.sum(self.frustaDepths[:i])))
+				frustum = AssembledObject(surfs=[Surface(RoundPlateGM(Re=self.frustaRadii[i-1], Ri=self.frustaRadii[i]), ReflectiveReceiver(self.absReceiver[-1]))], transform=translate(z=N.sum(self.frustaDepths[:i])))
 
-				FRU.append(frustum)
+			FRU.append(frustum)
 				
 		# Receiver Assembly ----------------------------------------
 
@@ -174,16 +172,13 @@ class TwoNparamcav(Assembly):
 		int_walls = self.Active_zone.get_surfaces()
 		self.bin_abs = N.zeros(len(self.areas)-1)
 		index = 0 # to track which element of the profile we are dealing with in absolute terms.
-		active_abs = N.zeros(len(self.areas)) # To track the radiative energy absorbed by the active zone in total.
-
-		receiver_abs = []
-		receiver_hits = []
 
 		# Bin Frusta:
 		for i in xrange(len(self.frustaDepths)):
 			# Adjust the hits detector position to take into account the placement of the receiver in comparision with the focal plane.
-			z1 = N.sum(self.frustaDepths[:i+1])-self.frustaDepths[i]+self.aperture_position
-			z2 = N.sum(self.frustaDepths[:i+1])+self.aperture_position
+			#z1 = N.sum(self.frustaDepths[:i+1])-self.frustaDepths[i]+self.aperture_position
+			#z2 = N.sum(self.frustaDepths[:i+1])+self.aperture_position
+
 			if i == 0:
 				r1 = self.apertureRadius
 			else:
@@ -191,14 +186,18 @@ class TwoNparamcav(Assembly):
 			r2 = self.frustaRadii[i]
 
 			abs, hits = int_walls[i].get_optics_manager().get_all_hits()
-
+			hits = int_walls[i].global_to_local(hits)
 			heights = N.around(hits[2], decimals=9)
+
+			if self.frustaDepths[i] < 0.:
+				heights = -heights
+
 			rads = N.around(N.sqrt(hits[0]**2.+hits[1]**2.), decimals=9)
 	
 			for j in xrange(self.bins_frusta[i]):
 				index+=1
-				z1bin = z1+j*(z2-z1)/self.bins_frusta[i]
-				z2bin = z1+(j+1)*(z2-z1)/self.bins_frusta[i]
+				z1bin = j*self.frustaDepths[i]/self.bins_frusta[i]
+				z2bin = (j+1)*self.frustaDepths[i]/self.bins_frusta[i]
 
 				r1bin = N.around(r1+j*(r2-r1)/self.bins_frusta[i], decimals=9)
 				r2bin = N.around(r1+(j+1)*(r2-r1)/self.bins_frusta[i], decimals=9)
@@ -215,9 +214,9 @@ class TwoNparamcav(Assembly):
 				self.bin_abs[index-1] = N.sum(abs[N.logical_and(test_depth, test_rads)])
 
 		# Bin the cone:
-		gethits = int_walls[-1].get_optics_manager().get_all_hits()
-		abs = gethits[0]
-		hits = N.around(gethits[1], decimals=9)
+		abs, hits = int_walls[-1].get_optics_manager().get_all_hits()
+		hits = N.around(hits, decimals=9)
+		hits = int_walls[i].global_to_local(hits)
 
 		for i in xrange(self.bins_cone):
 			index+=1
@@ -281,7 +280,8 @@ class TwoNparamcav(Assembly):
 
 		# Initialise pressures and steam quality at each position along the flow path:
 		self.p = N.ones(len(tube_positions))*p_in
-		self.qual = N.zeros(len(tube_positions))
+		self.qual = N.zeros(len(tube_positions)-1)
+		self.v = N.zeros(len(tube_positions))
 
 		# Correlation single phase:
 		def single_phase_u(Re, Pr, f_F, k, tube_D):
@@ -293,39 +293,35 @@ class TwoNparamcav(Assembly):
 				# Petukhov
 				return (Re*Pr*(f_F*k/(2.*tube_D))/(1.07+12.7*(Pr**(2./3.)-1.)*N.sqrt(f_F/2.)))
 
-
 		# Evaluate convective losses and qnets:
 		Qconvloss = uconvloss*self.areas[1:]*(self.T[1:]-self.T[0])
-		qnets = 	self.bin_abs[active[1:]]-emissions_guess[active[1:]]-Qconvloss[active[1:]]
+		qnets = self.bin_abs[active[1:]]-emissions_guess[active[1:]]-Qconvloss[active[1:]]
 
 		# Get starting enthalpy via Freesteam and initialise enthalpy array:
 		h_in = steam_pT(p_in,T_in).h
 		h_out = steam_pT(self.p[-1], T_out).h
 		hs_p = h_in+N.add.accumulate(N.hstack([0,qnets])/N.sum(qnets))*(h_out-h_in)
-		self.h = copy(hs_p)
-
-		# Evaluate the mass-flow:
-		self.m = N.sum(qnets)/(h_out-h_in)
+		self.h = N.ones(len(qnets)+1)*h_in
 
 		# Enthalpy convergence loop:
-		conv_h = N.ones(len(self.h))*N.inf
+		conv_h = N.ones(len(hs_p))*N.inf
 		while (conv_h>0.0001).any():
+			# Evaluate the mass-flow:
+			self.m = N.sum(qnets)/(h_out-h_in)
 
 			# Evaluate convective losses and qnets:
 			Qconvloss = uconvloss*self.areas[1:]*(self.T[1:]-self.T[0])
 			qnets = 	self.bin_abs[active[1:]]-emissions_guess[active[1:]]-Qconvloss[active[1:]]
 
 			# Initialise internal convective heat trasnfer coefficient:
-			uconv = N.zeros(len(tube_diameters_in))
+			uconv = N.zeros(len(tube_diameters_in)-1)
 
 			# Go through the flow-path, actualise the pressures and evaluate the heat transfer coefficients.
-			for i in xrange(len(tube_positions)):
+			for i in xrange(len(tube_positions)-1):
 
 				# Evaluate the steam properties:
 				steam_state = steam_ph(self.p[i], hs_p[i])
 				rho = steam_state.rho
-				mu = steam_state.mu
-				k = steam_state.k
 				Cp = steam_state.cp
 				x = steam_state.x
 
@@ -335,12 +331,13 @@ class TwoNparamcav(Assembly):
 				h_LG = steam_G.h-steam_L.h	
 
 				qual = (hs_p[i]-steam_L.h)/h_LG
-
 				v = self.m/(rho*N.pi*(tube_diameters_in[i]/2.)**2.)
-
-				# Calculate Reynolds, Prandtl, Darcy and Fanning friction factors
-				Re = rho*v*tube_diameters_in[i]/mu
-				Pr = mu/(k/Cp)
+				if qual<=0.:
+					mu = steam_state.mu
+					k = steam_state.k
+					# Calculate Reynolds, Prandtl, Darcy and Fanning friction factors
+					Re = rho*v*tube_diameters_in[i]/mu
+					Pr = mu/(k/Cp)
 
 				S = N.log(Re/(1.816*N.log(1.1*Re/(N.log(1.+1.1*Re)))))
 				f_D = (-2.*N.log10(tube_roughness/(3.71*tube_diameters_in[i])+2.18*S/Re))**(-2.) # Brkic using Lambert W-function approximation to solve Colebrook's implicit equation.
@@ -412,39 +409,40 @@ class TwoNparamcav(Assembly):
 
 						uconv[i] = a*(Re_G*(qual+rho_G/rho_L*(1.-qual)))**b*Pr_G**c*Y**d*k_G/tube_diameters_in[i]
 
-				if i < (len(tube_positions)-1):
-					# Calculate pressure drop for the next element:
-					#f_D = 4.*f_F # For using the friction factor formula advised by Kandlikar
-					dp = f_D*self.tube_lengths[i]/(2.*R_in[i])*rho*v**2./2.	
-					steam_next = steam_ph(self.p[i+1], self.h[i+1])
-					rho_next = steam_next.rho
-					v_next = self.m/(rho_next*N.pi*(tube_diameters_in[i+1]/2.)**2.)
-					self.p[i+1] = self.p[i]+rho*v**2./2.-rho_next*v_next**2./2.-dp
+				# Calculate pressure drop for the next element:
+				#f_D = 4.*f_F # For using the friction factor formula advised by Kandlikar
+				dp = f_D*self.tube_lengths[i]/(2.*R_in[i])*rho*v**2./2.
+				steam_next = steam_ph(self.p[i+1], self.h[i+1])
+				rho_next = steam_next.rho
+				v_next = self.m/(rho_next*N.pi*(tube_diameters_in[i+1]/2.)**2.)
+				self.p[i+1] = self.p[i]+rho*v**2./2.-rho_next*v_next**2./2.-dp
+				self.v[i] = v
 
 				# Store dryness fractions;
 				self.qual[i] = qual
 
-			# Evaluate the enthalpy at the outlet:
-			h_out = steam_pT(self.p[-1], T_out).h
+				# Re-evaluate enthalpies:
+				hs_p[i+1] = hs_p[i]+qnets[i]/self.m
 
-			# Evaluate the mass-flow:
-			self.m = N.sum(qnets)/(h_out-h_in)
+			# Final velocity storage:
+			self.v[i+1] = v_next
+
+			# Evaluate the enthalpy at the outlet:
+			#h_out = steam_pT(self.p[-1], T_out).h
+			h_out = hs_p[-1]
 
 			#FIXME: need a more reliable convergence insurance
 			if self.m < 0.01:
 				print 'bad_geom'
 				return 'bad_geom'
 
-			# Re-evaluate enthalpies:
-			for i in xrange(1,len(hs_p)):
-				hs_p[i] = hs_p[i-1]+(qnets[i-1])/self.m
-
 			# Evaluate convergence:
 			conv_h = N.abs((self.h-hs_p)/self.h)
 			self.h = (self.h+hs_p)/2.
 
 		# Get the tube elements properties:
-		self.uconv = (uconv[1:]+uconv[:-1])/2.
+		#self.uconv = (uconv[1:]+uconv[:-1])/2.
+		self.uconv = uconv
 
 		# Get temperatures from enthalpies via Freesteam
 		T_guess_fluid = N.zeros(len(self.h))
@@ -490,7 +488,7 @@ class TwoNparamcav(Assembly):
 			- self.T: Temeprature of each element (K).
 		'''
 		if inc_radiation != None:
-			inc_radiation = N.hstack((N.nan,inc_radiation)) # To take into account the aperture in the radiosity system.
+			inc_radiation = N.hstack((N.nan, inc_radiation)) # To take into account the aperture in the radiosity system.
 		# Solve radiosity problem
 		T = N.hstack((Tamb, Trec))
 
@@ -522,16 +520,15 @@ class TwoNparamcav(Assembly):
 		if type(self.emsReceiver)==float:
 			self.emsReceiver = N.hstack((1.,N.ones(len(self.areas)-1)*self.emsReceiver))
 
+		self.T = N.linspace(Trec_in, Trec_out, len(self.areas))#N.ones(len(self.areas))*Trec_out
+		self.T[0] = Tamb
+
 		emissions = N.ones(len(self.areas))
 		convergence = N.ones(len(emissions))
-
-		self.T = N.ones(len(self.areas))*Trec_in
-		self.T[0] = Tamb
 
 		while (convergence>0.00001).any():
 
 			result_T_guess = self.temperature_guess(Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions[1:], coating_thickness, coating_conductivity, tube_roughness, uconvloss, passive)
-
 			if result_T_guess == 'bad_geom': # discard 'bad_geom' geometries.
 
 				self.T_guess = N.ones(len(self.areas))*Trec_in

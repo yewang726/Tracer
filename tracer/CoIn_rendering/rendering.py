@@ -26,6 +26,9 @@ Reference:
 		self.r.addChild(st)
 		data = {'x':(1,0,0), 'y':(0,1,0), 'z':(0,0,1)}
 
+		#text_ref = coin.SoText2()
+		#self.r.addChild(text_ref)
+		#text_ref.string = 'Tracer rendering'
 
 		for k in data:
 
@@ -78,19 +81,26 @@ Reference:
 		SoGui.show(win)
 		SoGui.mainLoop()
 
-	def geom(self, resolution=None):
+	def geom(self, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
 		"""
 		Method to draw the geometry of the scene to a Coin3D scenegraph.
 		"""
-		nod = coin.SoSeparator()
-		mat = coin.SoMaterial()
-		mat.diffuseColor=(1,.5,.5)
-		nod.addChild(mat)
-		self.r.addChild(nod)
-		self.r.addChild(self.sim._asm.get_scene_graph(resolution))
+		"""
+		ls2 = coin.SoPointLight()
+		self.r.addChild(ls2)
+		ls2.position = (0,0,1)
+		ls2.color=(1,1,1)
+		"""
+		ls3 = coin.SoDirectionalLight()
+		self.r.addChild(ls3)
+		ls3.direction = (0,0,1)
+		ls3.color=(1,1,1)
 
-	def show_geom(self, resolution=None):
-		self.geom(resolution)
+
+		self.r.addChild(self.sim._asm.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
+
+	def show_geom(self, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
+		self.geom(resolution, fluxmap, trans, vmin, vmax)
 		self.show()
 
 	def rays(self, escaping_len=.2, max_rays=None, resolution=None):
@@ -181,8 +191,17 @@ Reference:
 
 		self.r.addChild(no)
 
-	def show_rays(self, escaping_len=.2, max_rays=None, resolution=None):
+	def show_rays(self, escaping_len=.2, max_rays=None, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
+
+		#ls = coin.SoPointLight()
+		#ls = coin.SoDirectionalLight()
+		#ls.color=(1,1,1)
+		#ls.direction = N.average(self.sim.tree[0].get_directions(), axis=1)
+		#self.r.addChild(ls)
+
+		#ls.position = N.average(self.sim.tree[0].get_vertices(), axis=1)
+
+		self.geom(resolution, fluxmap, trans, vmin, vmax)
 		self.rays(escaping_len, max_rays, resolution)
-		self.geom(resolution)
 		self.show()
 

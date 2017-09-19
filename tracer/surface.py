@@ -124,51 +124,76 @@ class Surface(HasFrame):
 		glob = N.tensordot(self._temp_frame, local, axes=([1], [0]))
 		return glob[:3]
 
-	def get_scene_graph(self,resolution=None):
+	def get_scene_graph(self, resolution, fluxmap, trans, vmin, vmax):
 		"""
 		Any object that provides a nice QuadMesh from the previous code should be able to render in Coin3D with with the following...
 		"""
 		from pivy import coin
 		import matplotlib.cm as cm
+		from matplotlib import colors
 
-		n = self.get_scene_graph_transform()
-
+		n0 = self.get_scene_graph_transform()
 		o = self.get_optics_manager()
-		if hasattr(o,'get_all_hits'):
 
-			e, h = o.get_all_hits()
-			xyz = self.global_to_local(h)[:3]
+		if (o.__class__.__name__ == N.array(['Reflective','RealReflective'])).any():
+			mat = coin.SoMaterial()
+			mat.diffuseColor = (.5,.5,.5)
+			mat.specularColor = (.6,.6,.6)
+			mat.shininess = 1.-o._abs
+			n0.addChild(mat)
+			fluxmap = False
+		elif fluxmap != None:
+			if hasattr(o,'get_all_hits'):
+				e, h = o.get_all_hits()
+				xyz = self.global_to_local(h)[:3]
+				# plot the histogram into the scenegraph
+				g = self.get_geometry_manager()
+				if hasattr(g, 'get_fluxmap'):
+					flux = g.get_fluxmap(e, xyz, resolution)
+					if not(hasattr(flux[0],'__len__')):
+						flux = [flux]
+				else:
+					fluxmap = False
+
+		meshes = self._geom.get_scene_graph(resolution)
+		for m in xrange(len(meshes)/3):
+			n = coin.SoSeparator()
+
+			X,Y,Z = meshes[3*m:3*m+3]
+			nr,nc = X.shape
+			A = [(X.flat[i],Y.flat[i],Z.flat[i]) for i in range(len(X.flat))]
+			coor = coin.SoCoordinate3()
+			coor.point.setValues(0, len(A), A)
+			n.addChild(coor)
+
+			qm = coin.SoQuadMesh()
+			qm.verticesPerRow = nc
+			qm.verticesPerColumn = nr
+			n.addChild(qm)
+
+			sh = coin.SoShapeHints()
+			sh.shapeType = coin.SoShapeHintsElement.UNKNOWN_SHAPE_TYPE
+			sh.vertexOrdering = coin.SoShapeHintsElement.COUNTERCLOCKWISE
+			sh.faceType = coin.SoShapeHintsElement.UNKNOWN_FACE_TYPE
+			n.addChild(sh)
+
+			if fluxmap:
+				# It works using n0 instead of n here but I have absolutely not clue why.
+				norm = colors.Normalize(vmin=vmin, vmax=vmax)
+				M = cm.ScalarMappable(norm=norm, cmap=cm.viridis)
+				colormap = M.to_rgba(flux[m])
+				mat = coin.SoMaterial()
+				mat.ambientColor = (1,1,1)
+				mat.diffuseColor.setValues(0, colormap.shape[0], colormap)
+				if trans==True:
+					mat.transparency.setValues(0,colormap.shape[0], 1.-flux[m]/N.amax(flux[m]))
+				n0.addChild(mat)
+
+				mymatbind = coin.SoMaterialBinding()
+				mymatbind.value = coin.SoMaterialBinding.PER_FACE
+				n0.addChild(mymatbind)
 			
-			# plot the histogram into the scenegraph
-			"""
-				How to do this?
-				* is the surface has a mesh, we could use IndexedFaceSet with
-				  colouring set for each face.
-				* if it's a flat surface, we can put a texture on the face
-				* but we want to do receivers with concave surfaces
-				* how to 'unwrap' the receiver won't always be obvious either
-				* we could use axisymmetric assumptions to simplify this
-				* maybe start with the flat surface case???
-			"""
-			g = self.get_geometry_manager()
-			if hasattr(g, 'get_fluxmap'):
-				flux = g.get_fluxmap(e,xyz, resolution)
+			n0.addChild(n)
+			
+		return n0
 
-			    M = cm.ScalarMappable(cmap=cm.plasma)
-			    colormap = M.to_rgba(flux)
-
-			    colormat = coin.SoMaterial()
-			    n.addChild(colormat)
-			    colormat.diffuseColor.setValues(0, colormap.shape[0], colormap)
-
-			    mymatbind = coin.SoMaterialBinding()
-			    mymatbind.value = coin.SoMaterialBinding.PER_FACE
-			    n.addChild(mymatbind)
-
-		graph = self._geom.get_scene_graph(resolution)
-		n.addChild(graph)
-
-		return n
-
-
-# vim: et:ts=4

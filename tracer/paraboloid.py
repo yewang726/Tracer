@@ -48,7 +48,7 @@ class Paraboloid(QuadricGM):
 		local_unit[:,down] *= -1
 
 		normals = N.dot(self._working_frame[:3,:3], local_unit)
-		
+
 		return normals
 
 	
@@ -153,7 +153,8 @@ class ParabolicDishGM(Paraboloid):
 		Cylindrical mesh based fluxmap for the dish.
 		'''
 		rads = N.sqrt(N.sum(local_coords[:2]**2., axis=0))
-		angs = N.arctan2(local_coords[1], local_coords[0])+N.pi
+		angs = N.arctan2(local_coords[1], local_coords[0])
+		angs[angs<0.] = angs[angs<0.]+2.*N.pi
 
 		# Generate a circular-edge mesh using polar coordinates.
 		r_end = self._R*(1.+1./resolution)
@@ -254,7 +255,6 @@ class RectangularParabolicDishGM(Paraboloid):
 
 		coords = N.concatenate((coords, N.ones((2,1,coords.shape[2]))), axis = 1)
 		# assumed no additional parameters to coords, axis = 1
-		#local = N.sum(N.linalg.inv(self._working_frame)[None,:2,:,None]*coords, axis=1)
 		local = N.sum(N.linalg.inv(self._working_frame)[None,:2,:,None] * \
 			coords[:,None,:,:], axis=2)
 

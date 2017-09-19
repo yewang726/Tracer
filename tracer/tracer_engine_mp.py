@@ -16,7 +16,7 @@ class TracerEngineMP(TracerEngine):
 
 	Not the cleanest or finest implementation. Could be blended with the original engine and use the very same api. It works.
 	'''
-	def multi_ray_sim(self, sources, procs=8, minener=1e-10, reps=1000, tree=True):
+	def multi_ray_sim(self, sources, procs=1, minener=1e-10, reps=1000, tree=True):
 		self.minener = minener # minimum energy threshold
 		self.reps = reps # stop iteration after this many ray bundles were generated (i.e. 
 					# after the original rays intersected some surface this many times).

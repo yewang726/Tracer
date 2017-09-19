@@ -22,12 +22,12 @@ def plot_hits(hist, extent):
 	f - a pylab figure object with the histogram on it, not shown yet.
 	"""
 	f = P.figure()
-	P.pcolormesh(hist.T, cmap='plasma')
-	P.colorbar()
+	ax = f.gca().pcolormesh(hist.T, cmap='plasma')
+	P.colorbar(ax)
 	return f
 	
 def test_case(focus, num_rays=100, h_depth=0.7, side=0.4):
-	# Case parameters (to be moved out:
+	# Case parameters:
 	D = 5.
 	
 	center = N.c_[[0, 7., 7.]]
@@ -53,12 +53,12 @@ def test_case(focus, num_rays=100, h_depth=0.7, side=0.4):
 
 	resolution = 20
  
-	# Plot, scale in suns:
-	f = plot_hits(assembly.histogram_hits(bins=resolution)[0]/(side/resolution)**2/1000., (-side/2., side/2., -side/2., side/2.))
-
 	# Render a subset of the total rays:
 	v = R(engine)
-	v.show_rays(max_rays=100, resolution=resolution)	
+	v.show_rays(max_rays=100, resolution=resolution, fluxmap=True)	
+
+	# Plot, scale in suns:
+	f = plot_hits(assembly.histogram_hits(bins=resolution)[0]/(side/resolution)**2/1000., (-side/2., side/2., -side/2., side/2.))
 	f.show()
 
 if __name__ == '__main__':
@@ -71,7 +71,7 @@ if __name__ == '__main__':
 	parser = optparse.OptionParser(usage=usage)
 	parser.add_option('--focus', '-f', dest='foc', type='float', default=6.25,
 		help="Dish focal length, default: %default")
-	parser.add_option('--num-rays', '-n', dest='num_rays', type='int', default=1e6,
+	parser.add_option('--num-rays', '-n', dest='num_rays', type='int', default=int(1e5),
 		help="Number of rays in the initial bundle, default %default")
 	parser.add_option('--hdepth', dest='hdepth', type='float', default=0.7,
 		help="Homogenizer depth, default %default")

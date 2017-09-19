@@ -23,7 +23,7 @@ def general_axis_rotation(axis,  ang):
 
 def rotation_to_z(vecs):
     """
-    Generate a rotation into a frame whose Z zxis points along the direction
+    Generate a rotation into a frame whose Z axis points along the direction
     indicated by ``vecs``. The rest of the directions are determined by
     requiring the new X to lie on the XY plane of the original frame, and by
     the right-hand rule.
@@ -59,7 +59,7 @@ def generate_transform(axis, angle, translation):
     return N.vstack((N.hstack((rot, translation)), N.r_[[0,0,0,1.]]))
 
 def rotx(ang):
-    """Generate a homogenous trransform for ang radians around the x axis"""
+    """Generate a homogenous transform for ang radians around the x axis"""
     s = N.sin(ang); c = N.cos(ang)
     return N.array([
         [1., 0, 0, 0],

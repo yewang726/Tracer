@@ -105,7 +105,7 @@ class QuadricGM(GeometryManager):
         
         # Storage for later reference:
         self._vertices = vertices
-        self._params = params #
+        self._params = params
   
         return params
     
