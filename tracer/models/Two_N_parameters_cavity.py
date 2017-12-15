@@ -16,6 +16,7 @@ from tracer.object import *
 from tracer.spatial_geometry import *
 
 from freesteam import *
+from Tube_materials import *
 
 from emissive_losses.emissive_losses import *
 from emissive_losses.view_factors_3D import *
@@ -23,13 +24,12 @@ from emissive_losses.view_factors_3D import *
 class TwoNparamcav(Assembly):
 	'''
 	TwoNparamcav object initializes the scene asembly for the geometrical and optical parameters given.
-	Several methods can be called to perform raytracing and emissive losses calculations.
-	- self.ray_sim(): performs a raytrace and returns the effective input flux, the total reflective losses and the energy absorbed by the receiver.
+	Several methods can be called to perform energy balance calculations.
+	- self.bin_hits(): Assigns the resulst of a ray-trace to the receiver surface elements.
+	- self.VF_sim(): Receiver view factor calculation method.
+	- self.energy_balance(): Evaluates the energy balance of the receiver using an iterative solution scheme based on the following two methods.
 	- self.temperature_guess(): Evaluates the temperature of the tubes considering water/steam flow conditions, incident ratiation and thermal emissions.
 	- self.emi_sim(): performs an emissive losses calculation and returns the total emissive losses.
-	- self.VF_sim(): Receiver view factor calculation method.
-	- self.sim(): performs a combined simulation of both emissive and reflective losses and returns a global efficiency.
-	- self.reset_opt(): empties the optics_manager bins to reuse the same object in a new ray trace.
 	'''
 	def __init__(self, apertureRadius, frustaRadii, frustaDepths, coneDepth, eps_wall, absReceiver, emsReceiver, aperture_position=0., envelope_radius=None, envelope_depth=None):
 		'''
@@ -228,7 +228,7 @@ class TwoNparamcav(Assembly):
 
 		return self.bin_abs
 
-	def temperature_guess(self, T_in, p_in, T_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions_guess, coating_thickness, coating_conductivity, tube_roughness, uconvloss, passive = None):
+	def temperature_guess(self, T_in, p_in, T_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions_guess, coating_thickness, coating_conductivity, tube_roughness, uconvloss, passive=None, tube_material=None):
 		'''
 		Makes a first guess on temperature profiles approximating the enthalpy gain of the water/steam mixture to be equal to flux input on the tubes external walls. The tube walls are coated with a selective coating. Default arguments are for Pyromark2500(R).
 
@@ -305,7 +305,8 @@ class TwoNparamcav(Assembly):
 
 		# Enthalpy convergence loop:
 		conv_h = N.ones(len(hs_p))*N.inf
-		while (conv_h>0.0001).any():
+		iterh = 0
+		while (conv_h>1e-9).any():
 			# Evaluate the mass-flow:
 			self.m = N.sum(qnets)/(h_out-h_in)
 
@@ -391,7 +392,6 @@ class TwoNparamcav(Assembly):
 						uconv[i] = N.amax([uconvNB, uconvCB])
 				
 					elif qual<0.9: # Here the validity of the correlation is changed from the STG version.				
-					#elif qual<1.:
 						# Groeneveld
 						a = 1.09e-3
 						b = 0.989
@@ -424,6 +424,7 @@ class TwoNparamcav(Assembly):
 				# Re-evaluate enthalpies:
 				hs_p[i+1] = hs_p[i]+qnets[i]/self.m
 
+
 			# Final velocity storage:
 			self.v[i+1] = v_next
 
@@ -440,8 +441,13 @@ class TwoNparamcav(Assembly):
 			conv_h = N.abs((self.h-hs_p)/self.h)
 			self.h = (self.h+hs_p)/2.
 
+			iterh += 1
+			if iterh>100:
+				print conv_h
+				print self.h
+				stop
+
 		# Get the tube elements properties:
-		#self.uconv = (uconv[1:]+uconv[:-1])/2.
 		self.uconv = uconv
 
 		# Get temperatures from enthalpies via Freesteam
@@ -481,7 +487,7 @@ class TwoNparamcav(Assembly):
 		- inc_radiation: array/list of incoming radiative power on the elements (W). If not None overrides the radiosity problem temperature boundary condition only where the inc_radiation value is not equal to 0.
 
 		Returns: 
-		- self.emissive_losses: overall emissive losses through t5, tube_diameters_in=0.02093, tube_diameters_out=0.02666, tube_conductivity=2he aperture
+		- self.emissive_losses: overall emissive losses through the aperture
 		The method also stores the temperatures and net emitted radiative flux and net radiative powers in the thermal wavelength region (semi-gray body assumption):
 			- self.q: Net thermal radiative flux (W/m2) per element.
 			- self.Q: Net thermal radiative power (W) per element.
@@ -497,21 +503,19 @@ class TwoNparamcav(Assembly):
 		self.Q = Q
 		self.T = T	
 
-	def energy_balance(self, Tamb, Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, coating_thickness = 45e-6, coating_conductivity = 1.2, tube_roughness=45e-6, uconvloss=30., passive = None):
+	def energy_balance(self, Tamb, Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, coating_thickness = 45e-6, coating_conductivity = 1.2, tube_roughness=45e-6, uconvloss=30., passive = None, tube_material=None):
 		'''
 		Method to simulate the radiative efficiency of a Two_N_parameters_cavity receiver with a realistic evaluation of the temepratures of the walls using fluid properties and the heat exchange model from the temperature_guess() method.
 
 		Arguments:
-		- T_in: Inlet temperature of the water  in (K).
+		- Trec_in: Inlet temperature of the water  in (K).
 		- p_in: Inlet pressure of the water in (pa).
-		- T_out: Outlet temeprature of the water in (K).
+		- Trec_out: Outlet temeprature of the water in (K).
 		- tube_diameters_in: inner diameter of the tubes in (m).
 		- tube_diameters_out: outer diameter of the tubesin (m).
 		- tube_conductivity: thermal conductivity of the tubes in (W/mK).
-		- nrays: number of rays in the bundle
-		- G: DNI in (W/m2)
-
 		- passive: array of the indices of the adiabatic surfaces in the cavity.
+		- tube_material: If given, it is a tube material instance that can reture temperature varying thermal conductivity. Overrides the tube_conductivity argument.
 
 		Returns:
 		The temperature of the elements, an array of zeros if the candidates are net energy destructors.
@@ -523,14 +527,18 @@ class TwoNparamcav(Assembly):
 		self.T = N.linspace(Trec_in, Trec_out, len(self.areas))#N.ones(len(self.areas))*Trec_out
 		self.T[0] = Tamb
 
+		if tube_material!=None:
+			tube_conductivity = tube_material.k(self.T[1:-self.bins_cone])
+
 		emissions = N.ones(len(self.areas))
 		convergence = N.ones(len(emissions))
+		iterQ = 0
 
-		while (convergence>0.00001).any():
+		threshold = 0.0001
+		while (convergence>threshold).any():
 
 			result_T_guess = self.temperature_guess(Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, emissions[1:], coating_thickness, coating_conductivity, tube_roughness, uconvloss, passive)
 			if result_T_guess == 'bad_geom': # discard 'bad_geom' geometries.
-
 				self.T_guess = N.ones(len(self.areas))*Trec_in
 				break
 
@@ -542,10 +550,22 @@ class TwoNparamcav(Assembly):
 				self.T_guess[passive] = N.nan
 
 			self.emi_sim(Tamb=Tamb, Trec=self.T_guess, VF=self.VF, areas=self.areas, inc_radiation=self.rad_passive)
-			self.T_guess = self.T
-			self.T_fluid = self.T_guess_fluid
-			convergence = N.abs((self.Q-emissions)/self.Q)
-			emissions = (self.Q+emissions)/2.
 
-		print 'Final T guess:', self.T_guess
+			self.T_guess[convergence[1:]>threshold] = self.T[1:][convergence[1:]>threshold]
+			self.T_fluid = self.T_guess_fluid
+
+			if tube_material!=None:
+				tube_conductivity = tube_material.k((self.T_guess[:-self.bins_cone]+self.T_fluid)/2.)
+
+			convergence = N.abs((self.Q-emissions)/emissions)#N.abs((self.Q-emissions)/self.Q)
+			if iterQ>30:
+				convergence = N.abs((self.Q-emissions))
+				threshold = 100.
+				print iterQ
+				#print convergence
+
+			emissions = (self.Q+emissions)/2.
+			iterQ += 1
+
+		print 'Final T guess:', self.T
 		return result_T_guess

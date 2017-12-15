@@ -24,9 +24,9 @@ class InfiniteCylinder(QuadricGM):
 		# The local normal is made from the X,Y components of the vertex:
 		local_norm = N.vstack((hit[:2], N.zeros(hit.shape[1])))
 		local_norm /= N.sqrt(N.sum(hit[:2]**2, axis=0))
-		
+
 		# Choose whether the normal is inside or outside:
-		local_norm[:, N.sum(local_norm[:2] * dir_loc[:2], axis=0) > 1e-9] *= -1
+		local_norm[:, N.sum(local_norm[:2] * dir_loc[:2], axis=0) > 0.] *= -1.
 		
 		# Back to global coordinates:
 		return N.dot(self._working_frame[:3,:3], local_norm)
@@ -100,8 +100,7 @@ class FiniteCylinder(InfiniteCylinder):
 		inside_ang_range = N.logical_and(angs>=self._ang_range[0], angs<=self._ang_range[1])
 
 		inside = N.logical_and(inside_height, inside_ang_range)
-		positive = prm > 1e-9
-		
+		positive = prm > 1e-6
 		hitting = inside & positive
 		select[N.logical_and(*hitting)] = 1
 		one_hitting = N.logical_xor(*hitting)
