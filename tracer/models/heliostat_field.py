@@ -12,11 +12,11 @@ References:
 import numpy as N
 
 from ..assembly import Assembly
-from .one_sided_mirror import rect_one_sided_mirror, rect_para_one_sided_mirror
+from .one_sided_mirror import rect_one_sided_mirror, rect_para_one_sided_mirror, flat_quad_one_sided_mirror
 from ..spatial_geometry import rotx, roty, rotz, general_axis_rotation
 
 class HeliostatField(Assembly):
-	def __init__(self, positions, width, height, absorptivity, aim_height, sigma, bi_var=True, focal_lengths=None):
+	def __init__(self, positions, width, height, absorptivity, aim_height, sigma, bi_var=True, focal_lengths=None, quad_params=None, MCRT_option='fast'):
 		"""
 		Generates a field of heliostats, each being a rectangular one-sided
 		mirror, initially pointing downward - for safety reasons, of course :)
@@ -27,19 +27,34 @@ class HeliostatField(Assembly):
 			heliostat.
 		apsorpt - part of incident energy absorbed by the heliostat.
 		aim_height - the height (Z coordinate) of the target for aiming
+		sigma - Heliostats surface slope error
+		bi_var - If true, the slope error is a gaussian bi-variate on x and y, if false, it is an axi-symmetrical radial gaussian error.
+		focal_lengths - the focal lengths of mirrors. If None, the mirrors are flat or quadric.
+		quad_params - if not None, it is an array of quadric parameters for a RectFlatQuadricSurfaceGM instance: each line is [a, b, c, d, e] the coefficients of the flat quadratic surface. 
 		"""
 		self._pos = positions
 		self._th = aim_height
 		face_down = rotx(N.pi)
 		tower_ht = N.array([0,0,self._th])
+
+		if focal_lengths==None:
+			focal_lengths = [None]*positions.shape[0]
+		if quad_params==None:
+			quad_params = [None]*positions.shape[0]
+		if not(hasattr(absorptivity, '__len__')):
+			absorptivity = N.ones(positions.shape[0])*absorptivity
 		
 		self._heliostats = []
-		for p in xrange(positions.shape[0]):
-			if focal_lengths != None:
-				hstat = rect_para_one_sided_mirror(width, height, focal_lengths[p], absorptivity, sigma, bi_var)
-			else: 
-				hstat = rect_one_sided_mirror(width, height, absorptivity, sigma, bi_var)
 
+		for p in xrange(positions.shape[0]):
+			assert(not((focal_lengths[p] != None) and (quad_params[p] != None)))
+			if (focal_lengths[p] == None) and (quad_params[p] == None):
+				hstat = rect_one_sided_mirror(width, height, absorptivity[p], sigma, bi_var, MCRT_option)	
+			elif focal_lengths[p] != None: 
+				hstat = rect_para_one_sided_mirror(width, height, focal_lengths[p], absorptivity[p], sigma, bi_var, MCRT_option)
+			else:
+				hstat = flat_quad_one_sided_mirror(width, height, quad_params[p], absorptivity[p], sigma, bi_var, MCRT_option)
+	
 			trans = face_down.copy()
 			trans[:3,3] = positions[p]
 			hstat.set_transform(trans)
@@ -55,7 +70,7 @@ class HeliostatField(Assembly):
 		"""Change the verical position of the tower's target."""
 		self._th = h
 	
-	def aim_to_sun(self, azimuth, zenith, tracking='azimuth_elevation', tracking_error=None, tracking_limits_primary_axis=None, tracking_limits_secondary_axis=None):
+	def aim_to_sun(self, azimuth, zenith, aim_points=None, tracking='azimuth_elevation', tracking_error=None, tracking_limits_primary_axis=None, tracking_limits_secondary_axis=None):
 		"""
 		Aim the heliostats in a direction that brings the incident energy to
 		the tower.
@@ -67,19 +82,25 @@ class HeliostatField(Assembly):
 		tracking - 'azimuth_elevation'; 'titl_roll': tracking actuation method. 
 		"""
 		sun_vec = solar_vector(azimuth, zenith)
-		tower_vec = -self._pos 
-		tower_vec[:,2] += self._th
-		tower_vec /= N.sqrt(N.sum(tower_vec**2, axis=1)[:,None])
-		hstat = sun_vec + tower_vec
-		hstat /= N.sqrt(N.sum(hstat**2, axis=1)[:,None])
+		if aim_points == None:
+			aim_point = -self._pos 
+			aim_point[:,2] += self._th
+			aim_point /= N.sqrt(N.sum(aim_point**2, axis=1)[:,None])
+			hstat = sun_vec + aim_point
+			hstat /= N.sqrt(N.sum(hstat**2, axis=1)[:,None])
+		else:
+			aim_points -= self._pos 
+			aim_points /= N.sqrt(N.sum(aim_points**2, axis=1)[:,None])
+			hstat = sun_vec + aim_points
+			hstat /= N.sqrt(N.sum(hstat**2, axis=1)[:,None])
 
 		ang_err_1 = 0.
 		ang_err_2 = 0.
 
 		if tracking_limits_primary_axis == None:
-			tracking_limits_primary_axis = [-Npi, N.pi]
+			tracking_limits_primary_axis = [-N.pi, N.pi]
 		if tracking_limits_secondary_axis == None:
-			tracking_limits_secondary_axis = [-Npi, N.pi]
+			tracking_limits_secondary_axis = [-N.pi, N.pi]
 
 		if tracking == 'azimuth_elevation':
 			hstat_az = N.arctan2(hstat[:,1], hstat[:,0])
@@ -92,7 +113,7 @@ class HeliostatField(Assembly):
 				ang_el = -hstat_el[hidx]+ang_err_2
 				if ang_az<tracking_limits_primary_axis[0] or ang_az>tracking_limits_primary_axis[1]:
 					continue		
-				elif ang_el<tracking_limits_secondary_axis[0] or ang_el>tracking_limits_secondary_axis[1]:
+				elif -ang_el<tracking_limits_secondary_axis[0] or -ang_el>tracking_limits_secondary_axis[1]:
 					continue
 				az_rot = rotz(ang_az)
 				elev_rot = rotx(ang_el)		

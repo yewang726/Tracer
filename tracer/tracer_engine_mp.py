@@ -32,6 +32,7 @@ class TracerEngineMP(TracerEngine):
 			self.ray_tracer(source, self.reps, self.minener, self.tree_switch)
 			return self
 		resm = pool.map(trace, sources)
+
 		del pool
 		
 		timetrace = time.clock() - timetrace
@@ -69,7 +70,8 @@ class TracerEngineMP(TracerEngine):
 							for s in xrange(len(surfs_object)):
 								for k in surfs_object[s]._opt.__dict__.keys():
 									if k != '_opt':
-										[self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k].append(q) for q in surfs_object[s]._opt.__dict__[k]]
+										if hasattr(surfs_object[s]._opt.__dict__[k], '__len__'):
+											[self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k].append(q) for q in surfs_object[s]._opt.__dict__[k]]
 
 				objs_engine = resm[eng]._asm.get_local_objects()
 				if len(objs_engine):
@@ -90,13 +92,14 @@ class TracerEngineMP(TracerEngine):
 					for s in xrange(len(surfs_object)):
 						for k in surfs_object[s]._opt.__dict__.keys():
 							if k != '_opt':
-								if len(surfs_object[s]._opt.__dict__[k]):
-									if k == '_absorbed':
-										self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k] = [N.hstack(self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k])]
-									else:	
-										self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k] = [N.column_stack(self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k])]
-								else:
-									self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k] = []
+								if hasattr(surfs_object[s]._opt.__dict__[k], '__len__'):
+									if len(surfs_object[s]._opt.__dict__[k])>0:
+										if k == '_absorbed':
+											self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k] = [N.hstack(self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k])]
+										else:	
+											self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k] = [N.column_stack(self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k])]
+								#else:
+								#	self._asm._assemblies[a]._objects[o].surfaces[s]._opt.__dict__[k] = []
 	
 		asm_objs = self._asm.get_local_objects()
 		if len(asm_objs):
@@ -105,14 +108,16 @@ class TracerEngineMP(TracerEngine):
 				for s in xrange(len(surfs_object)):
 					for k in surfs_object[s]._opt.__dict__.keys():
 						if k != '_opt':
-							if len(surfs_object[s]._opt.__dict__[k]):
-								if k == '_absorbed':
-									self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.hstack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
-								else:	
-									self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.column_stack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
-							else:
-								self._asm._objects[o].surfaces[s]._opt.__dict__[k] = []	
+							if hasattr(surfs_object[s]._opt.__dict__[k], '__len__'):
+								if len(surfs_object[s]._opt.__dict__[k])>0:
+									if k == '_absorbed':
+										self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.hstack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
+									else:	
+										self._asm._objects[o].surfaces[s]._opt.__dict__[k] = [N.column_stack(self._asm._objects[o].surfaces[s]._opt.__dict__[k])]
+							#else:
+							#	self._asm._objects[o].surfaces[s]._opt.__dict__[k] = []	
 						#print 'general assembly',' object ', o,' surface ', s,' number of rays: ', len(self._asm._objects[o].surfaces[s].get_optics_manager().get_all_hits()[0])
 		del resm
 		timepost2 = time.clock()-timepost
 		#print 'Post processing reassociation time: ', timepost2,'s'
+

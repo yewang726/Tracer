@@ -103,7 +103,7 @@ class AbsorptionAccountant(object):
     This optics manager remembers all of the locations where rays hit it
     in all iterations, and the energy absorbed from each ray.
     """
-    def __init__(self, real_optics, absorptivity, sigma=None, bi_var=True):
+    def __init__(self, real_optics, absorptivity, **kwargs):
         """
         Arguments:
         real_optics - the optics manager class to actually use. Expected to
@@ -112,10 +112,13 @@ class AbsorptionAccountant(object):
             LambertianReflector below).
         absorptivity - to be passed to a new real_optics object.
         """
+        self._opt = real_optics(absorptivity, **kwargs)
+        """
         if sigma==None:
             self._opt = real_optics(absorptivity)
         else:
             self._opt = real_optics(absorptivity, sigma, bi_var)
+        """
         self.reset()
     
     def reset(self):
@@ -147,7 +150,7 @@ class DirectionAccountant(AbsorptionAccountant):
     This optics manager remembers all of the locations where rays hit it
     in all iterations, and the energy absorbed from each ray.
     """
-    def __init__(self, real_optics, absorptivity, sigma=None, bi_var=True):
+    def __init__(self, real_optics, absorptivity, **kwargs):
         """
         Arguments:
         real_optics - the optics manager class to actually use. Expected to
@@ -156,7 +159,7 @@ class DirectionAccountant(AbsorptionAccountant):
             LambertianReflector below).
         absorptivity - to be passed to a new real_optics object.
         """
-        AbsorptionAccountant.__init__(self, real_optics, absorptivity, sigma, bi_var)
+        AbsorptionAccountant.__init__(self, real_optics, absorptivity, **kwargs)
     
     def reset(self):
         """Clear the memory of hits (best done before a new trace)."""
@@ -213,7 +216,7 @@ class RealReflectiveReceiver(AbsorptionAccountant):
 class RealReflectiveDetector(DirectionAccountant):
     """A wrapper around DirectionAccountant with a RealReflective optics"""
     def __init__(self, absorptivity=0, sigma=0, bi_var=True):
-        DirectionAccountant.__init__(self, RealReflective, absorptivity, sigma, bi_var)
+        DirectionAccountant.__init__(self, RealReflective, absorptivity, sigma=sigma, bi_var=bi_var)
 
 class OneSidedRealReflectiveReceiver(AbsorptionAccountant):
     """A wrapper around AbsorptionAccountant with a AbsorberRealReflector optics"""
@@ -341,9 +344,10 @@ class LambertianReflector(object):
             surface)
         selector - indices into ``rays`` of the hitting rays.
         """
-        directs = sources.pillbox_sunshape_directions(len(selector), N.pi/2.)
-        directs = N.sum(rotation_to_z(geometry.get_normals().T) * directs.T[:,None,:], axis=2).T
-        
+        directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
+        normals = geometry.get_normals()
+        directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
+
         outg = rays.inherit(selector,
             vertices=geometry.get_intersection_points_global(),
             energy=rays.get_energy()[selector]*(1. - self._abs),
@@ -360,6 +364,54 @@ class LambertianDetector(DirectionAccountant):
     """A wrapper around DirectionAccountant with LambertianReflector optics"""
     def __init__(self, absorptivity=0.):
         DirectionAccountant.__init__(self, LambertianReflector, absorptivity)
+
+class SemiLambertianReflector(object):
+    """
+    Represents the optics of an semi-diffuse surface, i.e. one
+    that absrobs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
+    """
+    def __init__(self, absorptivity=0., angular_range=N.pi/2.):
+        self._abs = absorptivity
+        self._ar = angular_range
+    
+    def __call__(self, geometry, rays, selector):
+        """
+        Arguments:
+        geometry - a GeometryManager which knows about surface normals, hit
+            points etc.
+        rays - the incoming ray bundle (all of it, not just rays hitting this
+            surface)
+        selector - indices into ``rays`` of the hitting rays.
+        """
+        directs = sources.pillbox_sunshape_directions(len(selector), self._ar)
+        normals = geometry.get_normals()
+
+        in_directs = rays.get_directions()[selector]
+        angs = N.arccos(N.dot(in_directs, -normals)[2])
+        glancing = angs>self._ar
+
+        directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
+        directs[glancing] = optics.reflections(in_directs[glancing], normals[glancing])
+      
+        energies = rays.get_energy()[selector]
+        energies[~glancing] = energies[~glancing]*(1. - self._abs)
+        
+        outg = rays.inherit(selector,
+            vertices=geometry.get_intersection_points_global(),
+            energy=energies,
+            direction=directs, 
+            parents=selector)
+        return outg
+
+class SemiLambertianReceiver(AbsorptionAccountant):
+    """A wrapper around AbsorptionAccountant with LambertianReflector optics"""
+    def __init__(self, absorptivity=1., ang_range=N.pi/2.):
+        AbsorptionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range)
+
+class SemiLambertianDetector(DirectionAccountant):
+    """A wrapper around DirectionAccountant with LambertianReflector optics"""
+    def __init__(self, absorptivity=0., ang_range=N.pi/2.):
+        DirectionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range)
 
 
 # vim: et:ts=4

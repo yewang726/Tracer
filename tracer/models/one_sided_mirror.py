@@ -5,6 +5,7 @@ from ..object import AssembledObject
 from ..surface import Surface
 from ..flat_surface import RectPlateGM
 from ..paraboloid import ParabolicDishGM, RectangularParabolicDishGM
+from ..quadratic_surface import RectFlatQuadricSurfaceGM
 from .. import optics_callables as opt
 
 from numpy import r_
@@ -29,7 +30,7 @@ def surfaces_for_next_iteration(self, rays, surface_id):
 	"""
 	return N.zeros((len(self.surfaces), rays.get_num_rays()), dtype=N.bool)
 
-def rect_one_sided_mirror(width, height, absorptivity=0, sigma=None, bi_var=True, location=None, rotation=None):
+def rect_one_sided_mirror(width, height, absorptivity=0, sigma=0., bi_var=True, option=None, location=None, rotation=None):
 	"""
 	construct an object with two surfaces: one on the XY plane, that is
 	specularly reflective, and one slightly below (negative z), that is opaque.
@@ -40,16 +41,13 @@ def rect_one_sided_mirror(width, height, absorptivity=0, sigma=None, bi_var=True
 	absorptivity - the ratio of energy incident on the reflective side that's
 		not reflected back.
 	"""
-	if sigma_xy == None:
-		opticall = opt.OneSidedReflectiveReceiver(absorptivity)
+	if option == 'fast':
+		surf = Surface(RectPlateGM(width, height),
+				   opt.OneSidedRealReflective(absorptivity, sigma, bi_var), location=location, rotation=rotation)
 	else:
-		opticall = opt.OneSidedReflectiveReceiver(absorptivity, sigma, bi_var)
-
-	surf = Surface(RectPlateGM(width, height), opticall, location=location, rotation=rotation)
-	#back = Surface(RectPlateGM(width, height), opt.OneSidedReflectiveReceiver(1), location=r_[0., 0., -1e-6])
-	#obj = AssembledObject(surfs=[surf, back])
+		surf = Surface(RectPlateGM(width, height),
+			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 	obj = AssembledObject(surfs=[surf])
-	#obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj, 			obj.__class__)
 
 	return obj
 
@@ -61,6 +59,25 @@ def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sig
 				   opt.OneSidedRealReflective(absorptivity, sigma, bi_var), location=location, rotation=rotation)
 	else:
 		surf = Surface(RectangularParabolicDishGM(width, height, focal_length),
+			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
+
+	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
+	obj = AssembledObject(surfs = [surf])
+	obj.surfaces_for_next_iteration = types.MethodType(
+		surfaces_for_next_iteration, obj, obj.__class__)
+	return obj
+
+def flat_quad_one_sided_mirror(width, height, quad_params, absorptivity=0., sigma=0., bi_var=True, option=None, location=None, rotation=None):
+
+	a, b, c, d, e, f = quad_params
+	if option == 'fast':
+		surf = Surface(RectFlatQuadricSurfaceGM(width, height, a, b, c, d, e, f),
+				   opt.OneSidedRealReflective(absorptivity, sigma, bi_var), location=location, rotation=rotation)
+	elif option == 'receiver':
+		surf = Surface(RectFlatQuadricSurfaceGM(width, height, a, b, c, d, e, f),
+			opt.OneSidedRealReflectiveReceiver(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
+	else:
+		surf = Surface(RectFlatQuadricSurfaceGM(width, height, a, b, c, d, e, f),
 			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 
 	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.

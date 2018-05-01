@@ -135,11 +135,11 @@ class Surface(HasFrame):
 		n0 = self.get_scene_graph_transform()
 		o = self.get_optics_manager()
 
-		if (o.__class__.__name__ == N.array(['Reflective','RealReflective'])).any():
+		if o.__class__.__name__[-10:] == 'Reflective':
 			mat = coin.SoMaterial()
 			mat.diffuseColor = (.5,.5,.5)
 			mat.specularColor = (.6,.6,.6)
-			mat.shininess = 1.-o._abs
+			mat.shininess = o._abs
 			n0.addChild(mat)
 			fluxmap = False
 		elif fluxmap != None:

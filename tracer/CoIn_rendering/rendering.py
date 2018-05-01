@@ -96,7 +96,6 @@ Reference:
 		ls3.direction = (0,0,1)
 		ls3.color=(1,1,1)
 
-
 		self.r.addChild(self.sim._asm.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
 
 	def show_geom(self, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):

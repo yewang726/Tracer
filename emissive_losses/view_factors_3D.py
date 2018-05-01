@@ -40,7 +40,7 @@ class RTVF():
 		S = self.A.get_surfaces()
 		
 		for i in xrange(len(S)):
-			self.A.get_surfaces()[i].get_optics_manager().reset()
+			S[i].get_optics_manager().reset()
 	
 	def test_precision(self):
 		'''
