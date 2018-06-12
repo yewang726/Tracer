@@ -22,6 +22,7 @@ class RTVF():
 	General class for view factor raytraces.
 	num_rays - number of rays fired per bundle
 	precision - confidence interval threshold on view factor values for each element and for the combination rule between all elements of the scene.
+	precision_rec - independent confidence interval threshold on the reciprocity rule between all elements of the scene.
 	'''
 	def __init__(self, num_rays=10000, precision=0.01, precision_option='absolute', precision_rec=None):
 		self.num_rays = num_rays
