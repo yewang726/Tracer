@@ -38,10 +38,8 @@ class RTVF():
 		'''
 		Optics reset script to be able to raytrace again the same object without having energy already stored on the surfaces.
 		'''
-		S = self.A.get_surfaces()
-		
-		for i in xrange(len(S)):
-			S[i].get_optics_manager().reset()
+		for S in self.A.get_surfaces():
+			S.get_optics_manager().reset()
 	
 	def test_precision(self):
 		'''
@@ -72,7 +70,7 @@ class RTVF():
 
 		# Evaluation of the relative precision of the evaluation
 		if self.precision_option == 'absolute':
-			stdev_test = self.stdev_VF <= self.precision
+			stdev_test = self.stdev_VF <= self.precision/2.
 
 			tas = self.stdev_VF*Ai
 			reciprocity_test = (tas+(tas.T)) <= self.precision_rec
@@ -116,13 +114,15 @@ class RTVF():
 class FONaR_RTVF(RTVF):
 	'''
 	FONaR view factor calculation class.
+	Needs to manually add the aperture inthe child class.
+	Imports directy a nice FONaR object with the binning scheme array etc. The receiver type is 'Surround' for the axisymmetrical concept and 'Polar' for a polar field facing cavity. This is important for the ray casting directions and handling of passive surfaces.
 	'''
-	def __init__(self, Assembly, binning_scheme, areas, num_rays=10000, precision=0.01, precision_option='absolute', precision_rec=None):
+	def __init__(self, Assembly, binning_scheme, areas, num_rays=10000, precision=0.01, precision_option='absolute', precision_rec=None, receiver_type='Surround', procs=8):
 		RTVF.__init__(self, num_rays, precision, precision_option, precision_rec)
+		self.receiver_type = receiver_type
 		self.binning_scheme = binning_scheme
 		self.areas = areas
-		procs = 8 # number of CPUs to be used
-
+		
 		self.t0 = time.clock()
 
 		self.VF = N.zeros((N.shape(binning_scheme)[0], N.shape(binning_scheme)[0]))
@@ -144,9 +144,6 @@ class FONaR_RTVF(RTVF):
 		stable_stats = N.zeros(N.shape(self.progress))
 		stat_cond = 2
 
-		#import matplotlib.pyplot as plt
-		#plt.figure()
-
 		while (self.progress==True).any() or (stable_stats<stat_cond).any():
 			self.ray_counts = N.zeros(N.shape(self.VF)[0])
 			tp = time.clock()
@@ -155,16 +152,23 @@ class FONaR_RTVF(RTVF):
 					disc = binning_scheme[i,1,1] == binning_scheme[i,1,0]
 					up = binning_scheme[i,1,1] > binning_scheme[i,1,0]
 
-					apbottom = i==0
-					apcyl = i==1
-					aptop = i==2
+					if receiver_type == 'Surround':
+						apbottom = i==0
+						apcyl = i==1
+						aptop = i==2
+						if i < 3:
+							rays_in = True
+						elif up:
+							rays_in = False
+						else:
+							rays_in = True
 
-					if i < 3:
-						rays_in = True
-					elif up:
-						rays_in = False
-					else:
-						rays_in = True
+					elif receiver_type == 'Polar':
+						ap = i==0
+						if up:
+							rays_in = True
+						else:
+							rays_in = False
 
 					S = []
 					for pr in xrange(procs):
@@ -172,10 +176,14 @@ class FONaR_RTVF(RTVF):
 						if disc:
 							if i>0:
 								outwards = binning_scheme[i,2,1] > binning_scheme[i,2,0]
-								if aptop:
-									source._directions = -source._directions
-								elif outwards:
-									if ~apbottom:
+								if receiver_type == 'Surround':		
+									if aptop:
+										source._directions = -source._directions
+									elif outwards:
+										if ~apbottom:
+											source._directions = -source._directions
+								if receiver_type == 'Polar':
+									if ~outward:
 										source._directions = -source._directions
 						S.append(source)
 
@@ -184,7 +192,7 @@ class FONaR_RTVF(RTVF):
 					#if i%10==0.:
 					#	print 'Surface ',i,'/', N.shape(self.VF)[0]
 					'''
-					if i == 3:#(N.shape(self.VF)[0]-(31+32)):# N.shape(self.VF)[0]-1:
+					if i == 0:#(N.shape(self.VF)[0]-(31+32)):# N.shape(self.VF)[0]-1:
 						view = Renderer(vf_tracer)
 						view.show_rays()
 						#view.show_geom()
@@ -192,11 +200,12 @@ class FONaR_RTVF(RTVF):
 					#'''
 					self.alloc_VF(i)
 					self.ray_counts[i] = self.num_rays
+
 			self.p += self.ray_counts
 			self.test_precision()
 			#N.set_printoptions(formatter={'float': '{: 0.2f}'.format})
 
-			#print N.round(self.VF, decimals=2)
+			print N.round(self.VF, decimals=2)
 			print '		Progress:', N.sum(self.progress),'/', N.size(self.progress),',', N.sum(N.sum(self.progress, axis=1)>0),'/', N.shape(self.progress)[0],'; Pass duration:', time.clock()-tp, 's'
 
 			stable_stats[self.progress==False] += 1
@@ -224,59 +233,83 @@ class FONaR_RTVF(RTVF):
 					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,1], r1=ahr[2,0], depth=N.abs(ahr[1,1]-ahr[1,0]), center=center, direction=N.array([0,0,1]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
 				else:
 					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,0], r1=ahr[2,1], depth=N.abs(ahr[1,1]-ahr[1,0]), center=center, direction=N.array([0,0,-1.]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
+
 		return S
 
 	def alloc_VF(self, n):
 
-		AP = self.A.get_objects()[0]
-		ENV_bot = self.A.get_objects()[1]
-		ABS = self.A.get_objects()[2]
-		ENV_top = self.A.get_objects()[3]
+		if self.receiver_type == 'Surround':
+			ap_index = 3
 
-		# Aperture: 3 surfaces
-		Aperture_bot_abs, Aperture_bot_hits = AP.get_surfaces()[0].get_optics_manager().get_all_hits()
-		Aperture_cyl_abs, Aperture_cyl_hits = AP.get_surfaces()[1].get_optics_manager().get_all_hits()
-		Aperture_top_abs, Aperture_top_hits = AP.get_surfaces()[2].get_optics_manager().get_all_hits()
+			AP = self.A.get_objects()[0]
+			ENV_bot = self.A.get_objects()[1]
+			ABS = self.A.get_objects()[2]
+			ENV_top = self.A.get_objects()[3]
 
-		# Absorber surfaces
-		ABS_surfs = ABS.get_surfaces()
-		Absorber_abs, Absorber_hits = ABS_surfs[0].get_optics_manager().get_all_hits()
-		for s in xrange(1,len(ABS_surfs)):
-			abso, hits = ABS_surfs[s].get_optics_manager().get_all_hits()
-			Absorber_abs = N.concatenate((Absorber_abs, abso))
-			Absorber_hits = N.concatenate((Absorber_hits, hits), axis=1)
+			# Aperture: 3 surfaces
+			Aperture_bot_abs, Aperture_bot_hits = AP.get_surfaces()[0].get_optics_manager().get_all_hits()
+			Aperture_cyl_abs, Aperture_cyl_hits = AP.get_surfaces()[1].get_optics_manager().get_all_hits()
+			Aperture_top_abs, Aperture_top_hits = AP.get_surfaces()[2].get_optics_manager().get_all_hits()
 
-		if len(ENV_bot.get_surfaces())>1:
-			# Envelope bot cylinder: 
-			Envelope_bot_abs, Envelope_bot_hits = ENV_bot.get_surfaces()[0].get_optics_manager().get_all_hits()
-			# Envelope top cylinder:
-			Envelope_top_abs, Envelope_top_hits = ENV_top.get_surfaces()[0].get_optics_manager().get_all_hits()
-			# Regroup envelopes
-			Envelope_abs = N.concatenate((Envelope_bot_abs, Envelope_top_abs))
-			Envelope_hits = N.concatenate((Envelope_bot_hits, Envelope_top_hits), axis=1)
+			# Absorber surfaces
+			ABS_surfs = ABS.get_surfaces()
+			Absorber_abs, Absorber_hits = ABS_surfs[0].get_optics_manager().get_all_hits()
+			for s in xrange(1,len(ABS_surfs)):
+				abso, hits = ABS_surfs[s].get_optics_manager().get_all_hits()
+				Absorber_abs = N.concatenate((Absorber_abs, abso))
+				Absorber_hits = N.concatenate((Absorber_hits, hits), axis=1)
 
-			# Regroup all receiver hits
-			Receiver_abs = N.concatenate((Envelope_abs, Absorber_abs))
-			Receiver_hits = N.concatenate((Envelope_hits, Absorber_hits), axis=1)
-		else:
-			Receiver_abs = Absorber_abs
-			Receiver_hits = Absorber_hits
+			if len(ENV_bot.get_surfaces())>1:
+				# Envelope bot cylinder: 
+				Envelope_bot_abs, Envelope_bot_hits = ENV_bot.get_surfaces()[0].get_optics_manager().get_all_hits()
+				# Envelope top cylinder:
+				Envelope_top_abs, Envelope_top_hits = ENV_top.get_surfaces()[0].get_optics_manager().get_all_hits()
+				# Regroup envelopes
+				Envelope_abs = N.concatenate((Envelope_bot_abs, Envelope_top_abs))
+				Envelope_hits = N.concatenate((Envelope_bot_hits, Envelope_top_hits), axis=1)
 
-		# Aperture:
-		self.VF[n,0] = N.sum(Aperture_bot_abs)
-		self.VF[n,1] = N.sum(Aperture_cyl_abs)
-		self.VF[n,2] = N.sum(Aperture_top_abs)
+				# Regroup all receiver hits
+				Receiver_abs = N.concatenate((Envelope_abs, Absorber_abs))
+				Receiver_hits = N.concatenate((Envelope_hits, Absorber_hits), axis=1)
+			else:
+				Receiver_abs = Absorber_abs
+				Receiver_hits = Absorber_hits
+
+			# Aperture:
+			self.VF[n,0] = N.sum(Aperture_bot_abs)
+			self.VF[n,1] = N.sum(Aperture_cyl_abs)
+			self.VF[n,2] = N.sum(Aperture_top_abs)
+
+		elif self.receiver_type == 'Polar':
+
+			# Aperture:
+			ap_index = 1
+			AP = self.A.get_objects()[0]
+			self.VF[n,0] = N.sum(AP.get_surfaces()[0].get_optics_manager().get_all_hits()[0])
+
+			# Rest of the absorber:
+			ABS = self.A.get_objects()[1:]
+	
+			absos = []
+			hitss = []
+
+			for o in xrange(len(ABS)):
+				abso, hits = ABS[o].get_surfaces()[0].get_optics_manager().get_all_hits()
+				absos.append(abso)
+				hitss.append(hits)
+			Receiver_abs = N.hstack(absos)
+			Receiver_hits = N.concatenate(hitss, axis=1)
 
 		# Get the angles out of the cartesian coordinates:
-		angles_receiver = N.arctan(Receiver_hits[1]/Receiver_hits[0])
-		angles_receiver[Receiver_hits[0]<0.] = N.pi+angles_receiver[Receiver_hits[0]<0.]
-		angles_receiver[N.logical_and(Receiver_hits[0]>0.,Receiver_hits[1]<0.)] = 2.*N.pi+angles_receiver[N.logical_and(Receiver_hits[0]>0.,Receiver_hits[1]<0.)]
+		angles_receiver = N.arctan2(Receiver_hits[1],Receiver_hits[0])
+		angles_receiver[angles_receiver<0.] = angles_receiver[angles_receiver<0.]+2.*N.pi
 
 		# Get the radii from the cartesian coordinates:
 		radii_receiver = N.around(N.sqrt(Receiver_hits[0]**2.+Receiver_hits[1]**2.),decimals=9)
 
-		for i in xrange(N.shape(self.VF)[0]-3):
-			ahr = self.binning_scheme[i+3]
+		for i in xrange(N.shape(self.VF)[0]-ap_index):
+
+			ahr = self.binning_scheme[i+ap_index]
 
 			ang0 = ahr[0,0]
 			ang1 = ahr[0,1]
@@ -284,24 +317,31 @@ class FONaR_RTVF(RTVF):
 			h1 = N.around(ahr[1,1], decimals=9)
 			r0 = N.around(ahr[2,0], decimals=9)
 			r1 = N.around(ahr[2,1], decimals=9)
+
 			if r0>r1:
 				r0,r1 = r1,r0
 			if h0>h1:
 				h0,h1 = h1,h0
 
 			# Some floating point errors around here,
-			hit_in_ang = N.logical_and(angles_receiver>ang0, angles_receiver<=ang1)
+			hit_in_ang = N.logical_and(angles_receiver>=ang0, angles_receiver<=ang1)
+
 			if h0==h1:
 				hit_in_h = N.logical_and(Receiver_hits[2]>=h0, Receiver_hits[2]<=h1)
 			else:
-				hit_in_h = N.logical_and(Receiver_hits[2]>h0, Receiver_hits[2]<=h1)
+				hit_in_h = N.logical_and(Receiver_hits[2]>=h0, Receiver_hits[2]<=h1)
+
 			if r0==r1:
 				hit_in_r = N.logical_and(radii_receiver>=r0, radii_receiver<=r1)	
 			else:
-				hit_in_r = N.logical_and(radii_receiver>r0, radii_receiver<=r1)
-			
-			hit_in_bin = N.logical_and(N.logical_and(hit_in_ang, hit_in_h), hit_in_r)
+				hit_in_r = N.logical_and(radii_receiver>=r0, radii_receiver<=r1)
+
+
+			hit_in_bin = hit_in_ang*hit_in_h*hit_in_r
+
 			hit_abs = N.sum(Receiver_abs[hit_in_bin])
+
+			self.VF[n,i+ap_index] = hit_abs
 
 			# This is to speed up the process: we empty the hits containers as we assign and consequently browse through the remaining ones faster. We break the loop as soon as the containers are empty
 			Receiver_abs = Receiver_abs[~hit_in_bin]
@@ -309,8 +349,8 @@ class FONaR_RTVF(RTVF):
 			angles_receiver = angles_receiver[~hit_in_bin]
 			radii_receiver = radii_receiver[~hit_in_bin]
 
-			self.VF[n,i+3] = hit_abs
 			if len(Receiver_abs) == 0:
+				'zeroleft'
 				break
 
 		self.reset_opt()
@@ -441,7 +481,7 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 		vf_tracer.itmax = 1 # stop iteration after this many ray bundles were generated (i.e. after the original rays intersected some surface this many times).
 		vf_tracer.minener = 1e-10 # minimum energy threshold
 		stable_stats = 0
-		while (self.progress==True).any() or stable_stats<3:
+		while (self.progress==True).any() or stable_stats<2:
 
 			tp = time.clock()
 

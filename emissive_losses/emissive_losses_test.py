@@ -3,7 +3,7 @@ from view_factors_3D import *
 from emissive_losses import radiosity_RTVF
 
 ex_caa = 0
-ex_holman = 0
+ex_holman = 1
 ex_Suryanarayana = 0
 
 if ex_caa:
@@ -35,22 +35,22 @@ if ex_caa:
 
 if ex_holman:
 	#Holman 8th edition p470, example 8.17 cylinder
-	cyl = Cylinder_cavity_RTVF(0.01,0.01, [0.01, 0.01,0.01], 10000, 0.01)
-	#VF = N.array(([0, 0.63, 0.195, 0.075, 0.1],
-	#			 [0.315, 0.37, 0.2175, 0.06, 0.0375],
-	#			 [0.0975, 0.2175, 0.37, 0.2175, 0.0975],
-	#			 [0.0375, 0.06, 0.2175, 0.37, 0.315],
-	#			 [0.1, 0.075, 0.195, 0.63, 0]))
-	VF = cyl.VF
+	cyl = Two_N_parameters_cavity_RTVF(apertureRadius=0.01, frustaRadii=[0.01,0.01,0.01], frustaDepths=[0.01,0.01,0.01], coneDepth=0, el_FRUs=[1,1,1], el_CON=1, num_rays=10000, precision=0.005)
+	'''
+	VF = N.array(([0., 0.63, 0.195, 0.075, 0.1],
+				 [0.315, 0.37, 0.2175, 0.06, 0.0375],
+				 [0.0975, 0.2175, 0.37, 0.2175, 0.0975],
+				 [0.0375, 0.06, 0.2175, 0.37, 0.315],
+				 [0.1, 0.075, 0.195, 0.63, 0.]))
+	'''
+	VF = cyl.VF_esperance
 	areas = cyl.areas
-	print VF
 	#areas = N.array([N.pi*(1e-2)**2,2*N.pi*1e-2*1e-2,2*N.pi*1e-2*1e-2,2*N.pi*1e-2*1e-2,N.pi*(1e-2)**2])
-	eps = N.array([1,0.6,0.6,0.6,0.6])
-	Tamb = 293
-	Twall = N.array([1273,1273,1273,1273])
+	eps = N.array([1.,0.6,0.6,0.6,0.6])
+	T = N.array([293.15,1273.15,1273.15,1273.15,1273.15])
 	inc_radiation = None
 
-	AA,bb,J,E,T,q,Q = radiosity_RTVF(VF, areas, eps, Tamb, Twall, inc_radiation)
+	AA,bb,J,E,T,q,Q = radiosity_RTVF(VF, areas, eps, T, inc_radiation)
 
 	print 'Q:', Q
 	print 'Q balance=', Q[0]+N.sum(Q[1:])

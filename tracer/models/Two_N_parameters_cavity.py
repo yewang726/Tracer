@@ -15,7 +15,7 @@ from tracer.optics_callables import *
 from tracer.object import *
 from tracer.spatial_geometry import *
 
-from freesteam import *
+#from freesteam import *
 from Tube_materials import *
 
 from emissive_losses.emissive_losses import *
@@ -63,7 +63,7 @@ class TwoNparamcav(Assembly):
 			self.absReceiver = absReceiver
 		assert(len(self.absReceiver)==(len(frustaRadii)+2))
 		self.emsReceiver = emsReceiver
-	
+
 		Envelope = Assembly()
 		self.Active_zone = Assembly()
 
@@ -155,7 +155,7 @@ class TwoNparamcav(Assembly):
 		# Emissivity array shaping. Aperture value has to be 1 for an open receiver. Takes place before the VF calculation to avoid spending useless time on this if the array is not shaped properly.
 		if (type(self.emsReceiver)!=N.ndarray) and (type(self.emsReceiver)!=list):
 			self.emsReceiver = N.hstack(N.append(1.,N.ones(N.sum(N.array(bins_frusta))+bins_cone)*self.emsReceiver))
-		assert(len(self.emsReceiver)==N.sum(N.array(bins_frusta))+bins_cone+1)
+		#assert(len(self.emsReceiver)==N.sum(N.array(bins_frusta))+bins_cone+1)
 
 		# Calculate geometry view factor
 		vfcase = Two_N_parameters_cavity_RTVF(self.apertureRadius, self.frustaRadii, self.frustaDepths, self.coneDepth, el_FRUs=bins_frusta, el_CON=bins_cone, num_rays=num_rays, precision=precision)
@@ -186,6 +186,7 @@ class TwoNparamcav(Assembly):
 			r2 = self.frustaRadii[i]
 
 			abs, hits = int_walls[i].get_optics_manager().get_all_hits()
+
 			hits = int_walls[i].global_to_local(hits)
 			heights = N.around(hits[2], decimals=9)
 
@@ -208,7 +209,7 @@ class TwoNparamcav(Assembly):
 				if r1bin>r2bin:
 					r1bin,r2bin = r2bin,r1bin
 
-				test_depth = N.logical_and(heights>=z1bin, heights<=z2bin)
+				test_depth = N.logical_and(heights>z1bin, heights<=z2bin)
 				test_rads = N.logical_and(rads>=r1bin, rads<=r2bin)
 
 				self.bin_abs[index-1] = N.sum(abs[N.logical_and(test_depth, test_rads)])
@@ -220,8 +221,8 @@ class TwoNparamcav(Assembly):
 
 		for i in xrange(self.bins_cone):
 			index+=1
-			r1 = self.frustaRadii[-1]*(1.-i)/self.bins_cone
-			r2 = self.frustaRadii[-1]*(1.-(i+1))/self.bins_cone
+			r1 = self.frustaRadii[-1]*(1.-float(i)/self.bins_cone)
+			r2 = self.frustaRadii[-1]*(1.-(i+1.)/self.bins_cone)
 			cone_hits_radii = N.around(N.sqrt(hits[0]**2+hits[1]**2), decimals=9)
 			section = N.logical_and(cone_hits_radii<=r1, cone_hits_radii>=r2)
 			self.bin_abs[index-1] = N.sum(abs[section])
@@ -496,14 +497,17 @@ class TwoNparamcav(Assembly):
 		if inc_radiation != None:
 			inc_radiation = N.hstack((N.nan, inc_radiation)) # To take into account the aperture in the radiosity system.
 		# Solve radiosity problem
+		if (Trec==None) and (Tamb!=None):
+			Trec = N.nan*N.ones(VF.shape[0]-1)
 		T = N.hstack((Tamb, Trec))
 
 		AA,bb,J,Eb,T,q,Q = radiosity_RTVF(VF, areas, self.emsReceiver, T, inc_radiation)
 		self.q = q
 		self.Q = Q
-		self.T = T	
+		self.T = T
+		return J,T,Q
 
-	def energy_balance(self, Tamb, Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, coating_thickness = 45e-6, coating_conductivity = 1.2, tube_roughness=45e-6, uconvloss=30., passive = None, tube_material=None):
+	def energy_balance(self, Tamb, Trec_in, p_in, Trec_out, tube_diameters_in, tube_diameters_out, tube_conductivity, coating_thickness = 45e-6, coating_conductivity = 1.2, tube_roughness=45e-6, uconvloss=30., passive=None, tube_material=None):
 		'''
 		Method to simulate the radiative efficiency of a Two_N_parameters_cavity receiver with a realistic evaluation of the temepratures of the walls using fluid properties and the heat exchange model from the temperature_guess() method.
 

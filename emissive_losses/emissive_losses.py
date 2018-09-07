@@ -28,37 +28,33 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 
 	if len(eps) != len(areas):
 		raise AttributeError
-	if (T ==None) and (inc_radiation == None):
+	if (T == None) and (inc_radiation == None):
 		raise AttributeError
 	# The radiosity problem is formulated as [AA][J]=[bb], and the following matrices are
 	# defined:
 	AA = N.zeros((n,n)) 
 	bb = N.zeros(n)
-	# radiosity problem, assuming specified boundary temperatures
-	# The problem is formulated as [AA][J]=[bb]
-	for i in range(n):
-		if (inc_radiation != None):
-			if ~N.isnan(inc_radiation[i]):	  
-				for j in range(n):
-					if i == j:
-						AA[i,j] = 1.-VF[i,j]
-					else:
-						AA[i,j] = -VF[i,j]
-				bb[i] = inc_radiation[i]
-				if q_net != None:
-					if ~N.isnan(q_net[i]):
-						bb[i] = bb[i]-q_net[i]
-		if (T != None):
-			if ~N.isnan(T[i]):
-				for j in range(n):
-				   if i == j:
-					  AA[i,j] = 1.-VF[i,j]*(1.-eps[i])
-				   else:
-					  AA[i,j] = -VF[i,j]*(1.-eps[i])
-				bb[i] = eps[i]*sigma*T[i]**4.
-	
+	AA[N.diag_indices(n)] = 1.
+	# Boundary conditions. Error raised if none or both of flux and tempreature are fixed at the boundary.
+	if (inc_radiation!=None) and (T!=None):
+		# If no BC in any element, raise error:
+		if N.logical_and(N.isnan(T), N.isnan(inc_radiation)).any():
+			raise AttributeError('At least one element has no boundary condition for radiosity')
+		# If BC has double definition, raise error:
+		if N.logical_and(~N.isnan(T), ~N.isnan(inc_radiation)).any():
+			raise AttributeError('At least one element has two boundary condition definitions for radiosity')
+	if (inc_radiation != None): # Flux
+		bb[~N.isnan(inc_radiation)] += inc_radiation[~N.isnan(inc_radiation)]
+		AA[~N.isnan(inc_radiation)] += -VF[~N.isnan(inc_radiation)]
+	else:  # Temperature
+		print bb.shape, T.shape, eps.shape
+		bb[~N.isnan(T)] += eps*sigma*T[~N.isnan(T)]**4.
+		AA[~N.isnan(T)] += -VF[~N.isnan(T)]*(1.-N.vstack(eps[~N.isnan(T)]))
+	if q_net != None: # net heat removal from teh surface always applies
+		bb[~N.isnan(q_net)] -= q_net[~N.isnan(q_net)]
+
 	if (N.isnan(bb).any()):
-		raise AttributeError('Wrong left hand side')
+		raise AttributeError('Wrong right hand side')
 	if N.isnan(AA).any():
 		print AA
 		stop
