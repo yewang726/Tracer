@@ -183,7 +183,7 @@ class FONaR_RTVF(RTVF):
 										if ~apbottom:
 											source._directions = -source._directions
 								if receiver_type == 'Polar':
-									if ~outward:
+									if ~outwards:
 										source._directions = -source._directions
 						S.append(source)
 
@@ -205,7 +205,7 @@ class FONaR_RTVF(RTVF):
 			self.test_precision()
 			#N.set_printoptions(formatter={'float': '{: 0.2f}'.format})
 
-			print N.round(self.VF, decimals=2)
+			#print N.round(self.VF, decimals=2)
 			print '		Progress:', N.sum(self.progress),'/', N.size(self.progress),',', N.sum(N.sum(self.progress, axis=1)>0),'/', N.shape(self.progress)[0],'; Pass duration:', time.clock()-tp, 's'
 
 			stable_stats[self.progress==False] += 1

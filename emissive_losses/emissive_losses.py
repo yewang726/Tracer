@@ -47,7 +47,6 @@ def radiosity_RTVF(VF, areas, eps, T=None, inc_radiation=None, q_net=None):
 		bb[~N.isnan(inc_radiation)] += inc_radiation[~N.isnan(inc_radiation)]
 		AA[~N.isnan(inc_radiation)] += -VF[~N.isnan(inc_radiation)]
 	else:  # Temperature
-		print bb.shape, T.shape, eps.shape
 		bb[~N.isnan(T)] += eps*sigma*T[~N.isnan(T)]**4.
 		AA[~N.isnan(T)] += -VF[~N.isnan(T)]*(1.-N.vstack(eps[~N.isnan(T)]))
 	if q_net != None: # net heat removal from teh surface always applies

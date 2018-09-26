@@ -142,11 +142,11 @@ class FiniteFlatGM(FlatGeometryManager):
 		self._global = v + p[None,:]*d
 		N.seterr(**oldsettings)
 		# above we ignore invalid values. Those rays can't be selected anyway.
-		
+
 		# Local should be deleted by children in their find_intersections.
 		self._local = N.dot(N.linalg.inv(self._working_frame),
 			N.vstack((self._global, N.ones(self._global.shape[1]))))
-
+		
 		return ray_prms
 		
 	def select_rays(self, idxs):

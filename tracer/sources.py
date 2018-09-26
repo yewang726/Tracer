@@ -279,8 +279,6 @@ def buie_distribution(num_rays, CSR, pre_process_CSR=True):
 
 	integ_phi_dni = 0.5*(phi_dni_int[:-1]*N.cos(theta_int[:-1])*N.sin(theta_int[:-1])+phi_dni_int[1:]*N.cos(theta_int[1:])*N.sin(theta_int[1:]))*(theta_int[1:]-theta_int[:-1])
 
-	#integ_phi_dni = (theta_int[1:]*phi_dni_int[:-1]-theta_int[:-1]*phi_dni_int[1:])*(theta_int[1:]+theta_int[:-1])/2.
-	
 	if CSR == 0.:
 		integ_phi = N.sum(integ_phi_dni)
 	else:

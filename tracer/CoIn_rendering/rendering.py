@@ -107,7 +107,7 @@ Reference:
 		self.geom(resolution, fluxmap, trans, vmin, vmax)
 		self.show()
 
-	def rays(self, escaping_len=.2, max_rays=None, resolution=None):
+	def rays(self, escaping_len=.02, max_rays=None, resolution=None):
 		"""
 		Method to draw the rays to a Coin3D scenegraph. Needs to be called after a raytrace has been performed.
 		"""
@@ -195,7 +195,7 @@ Reference:
 
 		self.r.addChild(no)
 
-	def show_rays(self, escaping_len=.2, max_rays=None, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
+	def show_rays(self, escaping_len=.02, max_rays=None, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None):
 
 		#ls = coin.SoPointLight()
 		#ls = coin.SoDirectionalLight()
