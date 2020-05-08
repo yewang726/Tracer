@@ -99,7 +99,7 @@ class Assembly(HasFrame):
         transform - the transformation matrix (as an array object) that describes the 
             new assembly in the coordinate system of the current assembly
         """
-        if transform == None:
+        if transform is None:
             transform = N.eye(4)
         self._assemblies.append(assembly)
         assembly.set_transform(transform)
