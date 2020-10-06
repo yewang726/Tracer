@@ -438,11 +438,11 @@ class SemiLambertianDetector(DirectionAccountant):
 
 class IAMReceiver(AbsorptionAccountant):
 	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
-	def __init__(self, absorptivity=1., ang_range=N.pi/2.):
+	def __init__(self, absorptivity=1., a_r=1.):
 		AbsorptionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r)
 
 class IAMdetector(AbsorptionAccountant):
 	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
-	def __init__(self, absorptivity=1., ang_range=N.pi/2.):
+	def __init__(self, absorptivity=1., a_r=1.):
 		AbsorptionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r)
 
