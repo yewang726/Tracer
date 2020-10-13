@@ -441,7 +441,7 @@ class IAMReceiver(AbsorptionAccountant):
 	def __init__(self, absorptivity=1., a_r=1.):
 		AbsorptionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r)
 
-class IAMDetector(AbsorptionAccountant):
+class IAMDetector(DirectionAccountant):
 	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
 	def __init__(self, absorptivity=1., a_r=1.):
 		DirectionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r)
