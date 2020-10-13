@@ -42,7 +42,7 @@ class Reflective_IAM(object):
 	
 	def __call__(self, geometry, rays, selector):
 
-		theta_AOI = N.arccos(N.dot(rays.get_directions()[:,selector], -geometry.get_normals()))
+		theta_AOI = N.arccos(N.dot(rays.get_directions()[:,selector].T, -geometry.get_normals()))
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=optics.reflections(rays.get_directions()[:,selector], geometry.get_normals()),
