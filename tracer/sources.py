@@ -229,7 +229,7 @@ def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction
 
 	rayb = RayBundle(vertices=vertices_global + center, directions=directions)
 	if flux != None:
-		cosangle = 2.*N.sin(N.sqrt(N.sum((rays_direction-source_direction)**2))/2.)
+		cosangle = 2.*N.arcsin(0.5*N.sqrt(N.sum((rays_direction-source_direction)**2)))
 		rayb.set_energy(x*y/num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
 	else:
 		rayb.set_energy(N.ones(num_rays)/float(num_rays)/procs)
@@ -452,14 +452,14 @@ def regular_square_bundle(num_rays, center, direction, width):
 	rayb.set_directions(directions)
 	return rayb
 
-def triangular_bundle(num_rays, A, AB, AC, direction, ang_range=N.pi/2., flux=None, procs=1):
+def triangular_bundle(num_rays, A, B, C, direction=None, ang_range=N.pi/2., flux=None, procs=1):
 	"""
-	Triangular ray-casting surface anchored on the point A.
+	Triangular ray-casting surface. A, B and C are 3D coordinates of the vertices. Right hand rule determines the normal vector direction.
 	Arguments:
 	- num_rays: the number of rays 
 	- A: The first summit of the triangle and its anchor point.
 	- AB and AC the vertices of the sides of the triangle in its plane of reference.
-	- direction: The direction at which the source is pointing
+	- direction: The direction around which rays are escaping the source. If None, the direction is the normal.
 	- ang_range: the angular range of the rays emitted by the source
 
 	Returns: 
@@ -469,24 +469,28 @@ def triangular_bundle(num_rays, A, AB, AC, direction, ang_range=N.pi/2., flux=No
 	# Declare random numbers:
 	r1 = N.vstack(N.random.uniform(size=num_rays))
 	r2 = N.vstack(N.random.uniform(size=num_rays))
-	# Define points in a local referential where A is at [0,0] on a z=0 plane.
-	sqrtr1 = N.sqrt(r1)
-	Plocs = sqrtr1*(1.-r2)*AB+r2*sqrtr1*AC # Triangle point picking
-
-	vertices_local = N.array([Plocs[:,0], Plocs[:,1], N.zeros(num_rays)])
-
-	# Bring everything back to the global referential:
-	rot = rotation_to_z(direction)
-	vertices_global = N.dot(rot, vertices_local)+N.vstack(A)
 	
+	AB = B-A	
+	AC = C-A
+	sqrtr1 = N.sqrt(r1)
+	vertices = (A+sqrtr1*(1.-r2)*AB+r2*sqrtr1*AC).T # Triangle point picking
+
 	# Local referential directions:
 	a = pillbox_sunshape_directions(num_rays, ang_range)
-	# Rotate to a frame in which <direction> is Z:
+	# Normal vector:
+	normal = N.cross(AB, AC)
+	normal = normal/N.sqrt(N.sum(normal**2))
+
+	if direction is None:
+		direction = normal
+	
+	# Rotate to a frame in which <direction> is direction:
+	rot = rotation_to_z(direction)
 	directions = N.sum(rot[...,None] * a[None,...], axis=1)
 
 	rayb = RayBundle()
 
-	rayb.set_vertices(vertices_global)
+	rayb.set_vertices(vertices)
 	rayb.set_directions(directions)
 
 	l1 = N.sqrt(N.sum(AB**2))
@@ -495,30 +499,37 @@ def triangular_bundle(num_rays, A, AB, AC, direction, ang_range=N.pi/2., flux=No
 	s = (l1+l2+l3)/2.
 	area = N.sqrt(s*(s-l1)*(s-l2)*(s-l3))
 	if flux != None:
-		rayb.set_energy(N.ones(num_rays)*flux*area/float(num_rays))
+		cosangle = 2.*N.arcsin(0.5*N.sqrt(N.sum((direction-normal)**2)))
+		rayb.set_energy(area/2./num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
 	else:
 		rayb.set_energy(N.ones(num_rays)/float(num_rays)/procs)
 
 	return rayb
 
-def trapezoid_bundle(num_rays, A, AB, AC, AD, direction, ang_range=N.pi/2., flux=None, procs=1):
+def trapezoid_bundle(num_rays, A, B, C, direction=None, ang_range=N.pi/2., flux=None, procs=1):
 	"""
-	Trapezoidal ray-casting surface.
+	Regular trapezoid ray-casting surface.
 	ABCD must be placed to follow the perimeter of the quadrilateral. AB is the first base and CD is the second base.
 	Arguments:
 	- num_rays: the number of rays cast
-	- A: the first point of the trapezoid and its anchor point in the global referential.
-	- AB: first base of the trapezoid on its plane of reference.
-	- AC: first diagonal of the trapezoid
-	- AD: last vertex of the trapezoid
-	- direction: The direction at which the source is pointing
+	- A: the first point of the trapezoid.
+	- B: second vertex forming AB the first base.
+	- C: third vertex forming AD the first diagonal. D is obtained by symmetry.
+	- direction: The around which the rays escape the source. If None: the normal of the surface with respect to the right hand rule.
 	- ang_range: the angular range of the rays emitted by the source
 	Returns:
 	- A ray-bundle object to ray-trace
 	"""
+	AB = B-A
+	AC = C-A
 	# Separate into two triangles ABC and ACD and calculate their respective areas:
 	l1 = N.sqrt(N.sum(AB**2))
 	l2 = N.sqrt(N.sum(AC**2))
+	cos_theta = N.dot(AC, AB)/(l1*l2)
+	cB = AB*(1.-1./l1*l2*cos_theta)
+	CD = -(AB-2.*cB)
+	AD = AC+CD
+	D = A+AD
 	l3 = N.sqrt(N.sum(AD**2))
 	l4 = N.sqrt(N.sum((-AB+AC)**2))
 	l5 = N.sqrt(N.sum((-AC+AD)**2))
@@ -532,8 +543,8 @@ def trapezoid_bundle(num_rays, A, AB, AC, AD, direction, ang_range=N.pi/2., flux
 	num_rays_ACD = num_rays-num_rays_ABC
 
 	# Get a ray-bundle for each triangle and concatenate them:
-	rayb_ABC = triangular_bundle(num_rays_ABC, A, AB, AC, direction, ang_range, flux)
-	rayb_ACD = triangular_bundle(num_rays_ACD, A, AC, AD, direction, ang_range, flux)
+	rayb_ABC = triangular_bundle(num_rays_ABC, A, B, C, direction, ang_range, flux)
+	rayb_ACD = triangular_bundle(num_rays_ACD, A, C, D, direction, ang_range, flux)
 	rayb = concatenate_rays([rayb_ABC,rayb_ACD])
 	if flux == None:
 		rayb.set_energy(N.ones(num_rays)/float(num_rays)/procs)

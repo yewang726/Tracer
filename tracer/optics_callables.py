@@ -32,6 +32,29 @@ class Reflective(object):
 	def reset(self):
 		pass
 
+class Reflective_IAM(object):
+	'''
+	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
+	'''
+	def __init__(self, absorptivity, a_r):
+		self._abs = absorptivity
+		self.a_r = a_r
+	
+	def __call__(self, geometry, rays, selector):
+		normals = geometry.get_normals()
+		directions = rays.get_directions()[:,selector]
+		vertical = N.sum(directions*normals, axis=0)*normals
+		theta_AOI = N.arccos(N.sqrt(N.sum(vertical**2)))
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			direction=optics.reflections(directions, normals),
+			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-N.cos(theta_AOI)/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			parents=selector)
+		return outg
+
+	def reset(self):
+		pass
+
 perfect_mirror = Reflective(0)
 
 class RealReflective(object):
@@ -98,6 +121,192 @@ class RealReflective(object):
 
 	def reset(self):
 		pass
+
+class SemiLambertianReflector(object):
+	"""
+	Represents the optics of an semi-diffuse surface, i.e. one that absrobs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
+	"""
+	def __init__(self, absorptivity=0., angular_range=N.pi/2.):
+		self._abs = absorptivity
+		self._ar = angular_range
+	
+	def __call__(self, geometry, rays, selector):
+		"""
+		Arguments:
+		geometry - a GeometryManager which knows about surface normals, hit
+			points etc.
+		rays - the incoming ray bundle (all of it, not just rays hitting this
+			surface)
+		selector - indices into ``rays`` of the hitting rays.
+		"""
+		directs = sources.pillbox_sunshape_directions(len(selector), self._ar)
+		normals = geometry.get_normals()
+
+		in_directs = rays.get_directions()[selector]
+		angs = N.arccos(N.dot(in_directs, -normals)[2])
+		glancing = angs>self._ar
+
+		directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
+		directs[glancing] = optics.reflections(in_directs[glancing], normals[glancing])
+	  
+		energies = rays.get_energy()[selector]
+		energies[~glancing] = energies[~glancing]*(1. - self._abs)
+		
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			energy=energies,
+			direction=directs, 
+			parents=selector)
+		return outg
+
+class LambertianReflector(object):
+	"""
+	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
+	that reflects rays in a random direction (uniform distribution of
+	directions in 3D, see tracer.sources.pillbox_sunshape_directions)
+	"""
+	def __init__(self, absorptivity=0.):
+		self._abs = absorptivity
+	
+	def __call__(self, geometry, rays, selector):
+		"""
+		Arguments:
+		geometry - a GeometryManager which knows about surface normals, hit
+			points etc.
+		rays - the incoming ray bundle (all of it, not just rays hitting this
+			surface)
+		selector - indices into ``rays`` of the hitting rays.
+		"""
+		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
+		normals = geometry.get_normals()
+		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
+
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			energy=rays.get_energy()[selector]*(1. - self._abs),
+			direction=directs, 
+			parents=selector)
+		return outg
+
+class LambertianSpecularReflector(object):
+	"""
+	Represents the optics of surface with mixed specular and diffuse characteristics. Specularity is the ratio of incident rays that are specularly reflected to the total number of rays incident on the surface.
+	"""
+	def __init__(self, absorptivity=0., specularity=0.5):
+		self._abs = absorptivity
+		self.specularity = specularity
+	
+	def __call__(self, geometry, rays, selector):
+		"""
+		Arguments:
+		geometry - a GeometryManager which knows about surface normals, hit
+			points etc.
+		rays - the incoming ray bundle (all of it, not just rays hitting this
+			surface)
+		selector - indices into ``rays`` of the hitting rays.
+		"""
+		in_directs = rays.get_directions()[:,selector]
+		normals = geometry.get_normals()
+		directs = N.zeros(in_directs.shape)
+
+		specular = N.random.rand(len(selector))<self.specularity
+
+		directs[:,specular] = optics.reflections(in_directs[:,specular], normals[:,specular])
+		direct_lamb = sources.pillbox_sunshape_directions(N.sum(~specular), ang_range=N.pi/2.)
+		directs[:,~specular] = N.sum(rotation_to_z(normals[:,~specular].T) * direct_lamb.T[:,None,:], axis=2).T
+
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			energy=rays.get_energy()[selector]*(1. - self._abs),
+			direction=directs, 
+			parents=selector)
+		return outg
+
+class PeriodicBoundary(object):
+	'''
+	The ray intersections incident on the surface are translated by a given period in the direction of the surface normal, creating a perdiodic boundary condition.
+	'''
+	def __init__(self, period):
+		self.period = period
+		
+	def __call__(self, geometry, rays, selector):
+		energy = rays.get_energy()[selector]
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			energy=N.zeros(len(selector)),
+			direction=rays.get_directions()[:,selector], 
+			parents=selector)
+		outg2 = ray_bundle.RayBundle(vertices=geometry.get_intersection_points_global()+self.period*geometry.get_normals(),
+			energy=energy,
+			directions=rays.get_directions()[:,selector], 
+			parents=selector)
+		outg = ray_bundle.concatenate_rays([outg, outg2])
+
+		return outg
+
+class RefractiveHomogenous(object):
+	"""
+	Represents the optics of a surface bordering homogenous media with 
+	constant refractive index on each side. The specific index in which a
+	refracted ray moves is determined by toggling between the two possible
+	indices.
+	"""
+	def __init__(self, n1, n2):
+		"""
+		Arguments:
+		n1, n2 - scalars representing the homogenous refractive index on each
+			side of the surface (order doesn't matter).
+		"""
+		self._ref_idxs = (n1, n2)
+	
+	def toggle_ref_idx(self, current):
+		"""
+		Determines which refractive index to use based on the refractive index
+		rays are currently travelling through.
+
+		Arguments:
+		current - an array of the refractive indices of the materials each of 
+			the rays in a ray bundle is travelling through.
+		
+		Returns:
+		An array of length(n) with the index to use for each ray.
+		"""
+		return N.where(current == self._ref_idxs[0], 
+			self._ref_idxs[1], self._ref_idxs[0])
+	
+	def __call__(self, geometry, rays, selector):
+		if len(selector) == 0:
+			return ray_bundle.empty_bund()
+		
+		n1 = rays.get_ref_index()[selector]
+		n2 = self.toggle_ref_idx(n1)
+		refr, out_dirs = optics.refractions(n1, n2, \
+			rays.get_directions()[:,selector], geometry.get_normals())
+		
+		if not refr.any():
+			return perfect_mirror(geometry, rays, selector)
+		
+		# Reflected energy:
+		R = N.ones(len(selector))
+		R[refr] = optics.fresnel(rays.get_directions()[:,selector][:,refr],
+			geometry.get_normals()[:,refr], n1[refr], n2[refr])
+		
+		# The output bundle is generated by stacking together the reflected and
+		# refracted rays in that order.
+		inters = geometry.get_intersection_points_global()
+		reflected_rays = rays.inherit(selector, vertices=inters,
+			direction=optics.reflections(
+				rays.get_directions()[:,selector],
+				geometry.get_normals()),
+			energy=rays.get_energy()[selector]*R,
+			parents=selector)
+		
+		refracted_rays = rays.inherit(selector[refr], vertices=inters[:,refr],
+			direction=out_dirs, parents=selector[refr],
+			energy=rays.get_energy()[selector][refr]*(1 - R[refr]),
+			ref_index=n2[refr])
+		
+		return reflected_rays + refracted_rays
 
 
 class AbsorptionAccountant(object):
@@ -263,100 +472,6 @@ class OneSidedRealReflective(RealReflective):
 		outg.set_energy(energy) #substitute previous step into ray energy array
 		return outg
 		
-class RefractiveHomogenous(object):
-	"""
-	Represents the optics of a surface bordering homogenous media with 
-	constant refractive index on each side. The specific index in which a
-	refracted ray moves is determined by toggling between the two possible
-	indices.
-	"""
-	def __init__(self, n1, n2):
-		"""
-		Arguments:
-		n1, n2 - scalars representing the homogenous refractive index on each
-			side of the surface (order doesn't matter).
-		"""
-		self._ref_idxs = (n1, n2)
-	
-	def toggle_ref_idx(self, current):
-		"""
-		Determines which refractive index to use based on the refractive index
-		rays are currently travelling through.
-
-		Arguments:
-		current - an array of the refractive indices of the materials each of 
-			the rays in a ray bundle is travelling through.
-		
-		Returns:
-		An array of length(n) with the index to use for each ray.
-		"""
-		return N.where(current == self._ref_idxs[0], 
-			self._ref_idxs[1], self._ref_idxs[0])
-	
-	def __call__(self, geometry, rays, selector):
-		if len(selector) == 0:
-			return ray_bundle.empty_bund()
-		
-		n1 = rays.get_ref_index()[selector]
-		n2 = self.toggle_ref_idx(n1)
-		refr, out_dirs = optics.refractions(n1, n2, \
-			rays.get_directions()[:,selector], geometry.get_normals())
-		
-		if not refr.any():
-			return perfect_mirror(geometry, rays, selector)
-		
-		# Reflected energy:
-		R = N.ones(len(selector))
-		R[refr] = optics.fresnel(rays.get_directions()[:,selector][:,refr],
-			geometry.get_normals()[:,refr], n1[refr], n2[refr])
-		
-		# The output bundle is generated by stacking together the reflected and
-		# refracted rays in that order.
-		inters = geometry.get_intersection_points_global()
-		reflected_rays = rays.inherit(selector, vertices=inters,
-			direction=optics.reflections(
-				rays.get_directions()[:,selector],
-				geometry.get_normals()),
-			energy=rays.get_energy()[selector]*R,
-			parents=selector)
-		
-		refracted_rays = rays.inherit(selector[refr], vertices=inters[:,refr],
-			direction=out_dirs, parents=selector[refr],
-			energy=rays.get_energy()[selector][refr]*(1 - R[refr]),
-			ref_index=n2[refr])
-		
-		return reflected_rays + refracted_rays
-		
-
-class LambertianReflector(object):
-	"""
-	Represents the optics of an ideal diffuse (lambertian) surface, i.e. one
-	that reflects rays in a random direction (uniform distribution of
-	directions in 3D, see tracer.sources.pillbox_sunshape_directions)
-	"""
-	def __init__(self, absorptivity=0.):
-		self._abs = absorptivity
-	
-	def __call__(self, geometry, rays, selector):
-		"""
-		Arguments:
-		geometry - a GeometryManager which knows about surface normals, hit
-			points etc.
-		rays - the incoming ray bundle (all of it, not just rays hitting this
-			surface)
-		selector - indices into ``rays`` of the hitting rays.
-		"""
-		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
-		normals = geometry.get_normals()
-		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
-
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			energy=rays.get_energy()[selector]*(1. - self._abs),
-			direction=directs, 
-			parents=selector)
-		return outg
-
 class LambertianReceiver(AbsorptionAccountant):
 	"""A wrapper around AbsorptionAccountant with LambertianReflector optics"""
 	def __init__(self, absorptivity=1.):
@@ -367,51 +482,33 @@ class LambertianDetector(DirectionAccountant):
 	def __init__(self, absorptivity=0.):
 		DirectionAccountant.__init__(self, LambertianReflector, absorptivity)
 
-class SemiLambertianReflector(object):
-	"""
-	Represents the optics of an semi-diffuse surface, i.e. one
-	that absrobs and reflects rays in a random direction if they come in a certain angular range and fully specularly if they come from a larger angle
-	"""
-	def __init__(self, absorptivity=0., angular_range=N.pi/2.):
-		self._abs = absorptivity
-		self._ar = angular_range
-	
-	def __call__(self, geometry, rays, selector):
-		"""
-		Arguments:
-		geometry - a GeometryManager which knows about surface normals, hit
-			points etc.
-		rays - the incoming ray bundle (all of it, not just rays hitting this
-			surface)
-		selector - indices into ``rays`` of the hitting rays.
-		"""
-		directs = sources.pillbox_sunshape_directions(len(selector), self._ar)
-		normals = geometry.get_normals()
-
-		in_directs = rays.get_directions()[selector]
-		angs = N.arccos(N.dot(in_directs, -normals)[2])
-		glancing = angs>self._ar
-
-		directs[~glancing] = N.sum(rotation_to_z(normals[~glancing].T) * directs[~glancing].T[:,None,:], axis=2).T
-		directs[glancing] = optics.reflections(in_directs[glancing], normals[glancing])
-	  
-		energies = rays.get_energy()[selector]
-		energies[~glancing] = energies[~glancing]*(1. - self._abs)
-		
-		outg = rays.inherit(selector,
-			vertices=geometry.get_intersection_points_global(),
-			energy=energies,
-			direction=directs, 
-			parents=selector)
-		return outg
-
 class SemiLambertianReceiver(AbsorptionAccountant):
-	"""A wrapper around AbsorptionAccountant with LambertianReflector optics"""
+	"""A wrapper around AbsorptionAccountant with SemiLambertianReflector optics"""
 	def __init__(self, absorptivity=1., ang_range=N.pi/2.):
-		AbsorptionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range)
+		AbsorptionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range=ang_range)
 
 class SemiLambertianDetector(DirectionAccountant):
 	"""A wrapper around DirectionAccountant with LambertianReflector optics"""
 	def __init__(self, absorptivity=0., ang_range=N.pi/2.):
-		DirectionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range)
+		DirectionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range=ang_range)
+
+class LambertianSpecularReceiver(AbsorptionAccountant):
+	"""A wrapper around AbsorptionAccountant with LambertianSpecularReflector optics"""
+	def __init__(self, absorptivity=1., specularity=0.5):
+		AbsorptionAccountant.__init__(self, LambertianSpecularReflector, absorptivity, specularity=specularity)
+
+class LambertianSpecularDetector(DirectionAccountant):
+	"""A wrapper around DirectionAccountant with LambertianSpecularReflector optics"""
+	def __init__(self, absorptivity=1., specularity=0.5):
+		DirectionAccountant.__init__(self, LambertianSpecularReflector, absorptivity, specularity=specularity)
+
+class IAMReceiver(AbsorptionAccountant):
+	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1.):
+		AbsorptionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r=a_r)
+
+class IAMDetector(DirectionAccountant):
+	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1.):
+		DirectionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r=a_r)
 

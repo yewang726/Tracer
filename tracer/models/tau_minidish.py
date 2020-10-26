@@ -36,7 +36,7 @@ class MiniDish(HomogenizedLocalReceiver):
 		homog_opt_eff - the optical efficiency of each mirror in the homogenizer
 		"""
 		dish_surf = Surface(ParabolicDishGM(diameter, focal_length), 
-			opt.Reflective(1 - dish_opt_eff))
+			opt.Reflective(1 - dish_opt_eff), fixed_color=(1.,0.,0.))
 		receiver_dims = (receiver_side, receiver_side*receiver_aspect)
 		HomogenizedLocalReceiver.__init__(self, dish_surf, receiver_pos, \
 			receiver_dims, homogenizer_depth, homog_opt_eff)

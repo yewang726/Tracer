@@ -78,7 +78,7 @@ Reference:
 		if win == None: sys.exit(1)
 		viewer = SoGuiExaminerViewer(win)
 		from PyQt4 import QtGui
-		bgcol = QtGui.QColor(0,255,255,0)
+		bgcol = QtGui.QColor(125,255,255,0)
 		viewer.setBackgroundColor(bgcol)
 		viewer.setSceneGraph(self.r)
 		viewer.setTitle("Examiner Viewer")
@@ -158,7 +158,11 @@ Reference:
 					c1 = sv[:,ray]
 					for cs in first_childs:
 						c2 = ev[:,cs]
-						co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
+						# if the ray is not on the direction, it is a boundary condition affected ray and should not be represented
+						dir_vecs = N.round((c2-c1)/N.sqrt(N.sum((c2-c1)**2)), decimals=6)
+						dir_ray = N.round(sd[:,ray], decimals=6)
+						if (dir_vecs == dir_ray).all():
+							co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
 				else:
 					l = escaping_len

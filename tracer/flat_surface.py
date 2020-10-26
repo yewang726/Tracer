@@ -47,7 +47,7 @@ class FlatGeometryManager(GeometryManager):
 		
 		# Takes into account a negative depth
 		# Note that only the 3rd row of params is relevant here!
-		negative = params < 1e-9
+		negative = params < 1e-6
 		params[negative] = N.inf
 		
 		self._params = params
@@ -335,7 +335,6 @@ class ExtrudedRectPlateGM(RectPlateGM):
 		flux_top = eners_top/areas_top
 
 		return N.hstack(flux_bot), N.hstack(flux_mid_left), N.hstack(flux_mid_right), N.hstack(flux_top)
-
 
 class RoundPlateGM(FiniteFlatGM):
 	"""
