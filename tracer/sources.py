@@ -500,7 +500,11 @@ def triangular_bundle(num_rays, A, B, C, direction=None, ang_range=N.pi/2., flux
 	area = N.sqrt(s*(s-l1)*(s-l2)*(s-l3))
 	if flux != None:
 		cosangle = 2.*N.arcsin(0.5*N.sqrt(N.sum((direction-normal)**2)))
+<<<<<<< HEAD
 		rayb.set_energy(area/2./num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
+=======
+		rayb.set_energy(x*y/num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
+>>>>>>> 6fbe83d237378813b001c0b213783acad730e61f
 	else:
 		rayb.set_energy(N.ones(num_rays)/float(num_rays)/procs)
 

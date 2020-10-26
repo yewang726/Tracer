@@ -29,7 +29,10 @@ class Surface(HasFrame):
 		self._geom = geometry
 		self._opt = optics
 		self._fixed_color = fixed_color
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 6fbe83d237378813b001c0b213783acad730e61f
 		
 	def get_optics_manager(self):
 		"""
@@ -154,12 +157,15 @@ class Surface(HasFrame):
 				mat.shininess = o._abs
 				n0.addChild(mat)
 				fluxmap = False
+<<<<<<< HEAD
 			elif o.__class__.__name__ == 'PeriodicBoundary':
 				mat = coin.SoMaterial()
 				mat.ambientColor = (.0,.5,.5)
 				mat.transparency = (0.8)
 				n0.addChild(mat)
 				fluxmap = False
+=======
+>>>>>>> 6fbe83d237378813b001c0b213783acad730e61f
 			elif fluxmap != None:
 				if hasattr(o,'get_all_hits'):
 					hitdata = o.get_all_hits()
@@ -172,12 +178,15 @@ class Surface(HasFrame):
 							flux = [flux]
 					else:
 						fluxmap = False
+<<<<<<< HEAD
 			else: 
 				mat = coin.SoMaterial()
 				mat.diffuseColor = (0.2,0.2,0.2)
 				mat.specularColor = (0.2,0.2,0.2)
 				n0.addChild(mat)
 				fluxmap = False
+=======
+>>>>>>> 6fbe83d237378813b001c0b213783acad730e61f
 
 		meshes = self._geom.get_scene_graph(resolution)
 		for m in xrange(len(meshes)/3):
@@ -220,4 +229,5 @@ class Surface(HasFrame):
 			n0.addChild(n)
 			
 		return n0
+
 

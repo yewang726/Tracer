@@ -492,6 +492,7 @@ class SemiLambertianDetector(DirectionAccountant):
 	def __init__(self, absorptivity=0., ang_range=N.pi/2.):
 		DirectionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range=ang_range)
 
+<<<<<<< HEAD
 class LambertianSpecularReceiver(AbsorptionAccountant):
 	"""A wrapper around AbsorptionAccountant with LambertianSpecularReflector optics"""
 	def __init__(self, absorptivity=1., specularity=0.5):
@@ -502,6 +503,8 @@ class LambertianSpecularDetector(DirectionAccountant):
 	def __init__(self, absorptivity=1., specularity=0.5):
 		DirectionAccountant.__init__(self, LambertianSpecularReflector, absorptivity, specularity=specularity)
 
+=======
+>>>>>>> 6fbe83d237378813b001c0b213783acad730e61f
 class IAMReceiver(AbsorptionAccountant):
 	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
 	def __init__(self, absorptivity=1., a_r=1.):
