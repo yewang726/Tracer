@@ -72,7 +72,7 @@ def refractions(n1, n2, ray_dirs, normals):
 	n = N.broadcast_arrays(n2/n1, ray_dirs[0])[0]
 	normals = N.broadcast_arrays(normals, ray_dirs)[0]
 	cos1 = (normals*ray_dirs).sum(axis=0)
-	refracted = cos1**2 >= 1 - n**2
+	refracted = cos1**2 >= 1. - n**2
 	
 	# Throw away totally-reflected rays.
 	cos1 = cos1[refracted]
@@ -81,9 +81,9 @@ def refractions(n1, n2, ray_dirs, normals):
 	n = n[refracted]
 	
 	refr_dirs = (ray_dirs - cos1*normals)/n
-	cos2 = N.sqrt(1 - 1./n**2*(1 - cos1**2))
-	refr_dirs += normals*cos2*N.where(cos1 < 0, -1, 1)
-	
+	cos2 = N.sqrt(1 - 1./n**2*(1. - cos1**2))
+	refr_dirs += normals*cos2*N.where(cos1 < 0., -1, 1)
+
 	return refracted, refr_dirs
 
 def refr_idx_hartmann(wavelength, a, b, c, d, e):
@@ -96,3 +96,12 @@ def refr_idx_hartmann(wavelength, a, b, c, d, e):
 	where L is the wavelength.
 	"""
 	return a + b/(c - wavelength) 
+
+def attenuations(path_lengths, attenuation_coefficient, energy):
+	'''
+	Calculates energy attenuation from a Lambert's Law.
+	'''
+	T = N.exp(-attenuation_coefficient*path_lengths)
+	energy = T*energy
+	
+	return energy

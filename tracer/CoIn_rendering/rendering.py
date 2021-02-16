@@ -78,7 +78,7 @@ Reference:
 		if win == None: sys.exit(1)
 		viewer = SoGuiExaminerViewer(win)
 		from PyQt4 import QtGui
-		bgcol = QtGui.QColor(125,255,255,0)
+		bgcol = QtGui.QColor(50,50,50,0)
 		viewer.setBackgroundColor(bgcol)
 		viewer.setSceneGraph(self.r)
 		viewer.setTitle("Examiner Viewer")
@@ -173,7 +173,7 @@ Reference:
 					c2 = sv[:,ray] + sd[:,ray]*l
 					co += [(c1[0],c1[1],c1[2]), (c2[0],c2[1],c2[2])]
 
-			color=(1,1-float(level)/lentree,0.5)
+			color=(1-float(level)/lentree,0,0)
 
 			no1 = coin.SoSeparator()
 
@@ -183,7 +183,7 @@ Reference:
 
 			ds = coin.SoDrawStyle()
 			ds.style = ds.LINES
-			ds.lineWidth = 2
+			ds.lineWidth = 1
 			no1.addChild(ds)
 
 			coor = coin.SoCoordinate3()

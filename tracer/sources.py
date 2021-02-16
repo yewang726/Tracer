@@ -514,7 +514,7 @@ def trapezoid_bundle(num_rays, A, B, C, direction=None, ang_range=N.pi/2., flux=
 	- num_rays: the number of rays cast
 	- A: the first point of the trapezoid.
 	- B: second vertex forming AB the first base.
-	- C: third vertex forming AD the first diagonal. D is obtained by symmetry.
+	- C: third vertex forming AC the first diagonal. D is obtained by symmetry.
 	- direction: The around which the rays escape the source. If None: the normal of the surface with respect to the right hand rule.
 	- ang_range: the angular range of the rays emitted by the source
 	Returns:

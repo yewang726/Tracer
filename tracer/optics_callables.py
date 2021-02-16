@@ -15,13 +15,12 @@ class Reflective(object):
 	absorptivity - the amount of energy absorbed before reflection.
 	
 	Returns:
-	refractive - a function with the signature required by Surface.
+	reflective - a function with the signature required by Surface.
 	"""
 	def __init__(self, absorptivity):
 		self._abs = absorptivity
 	
 	def __call__(self, geometry, rays, selector):
-
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=optics.reflections(rays.get_directions()[:,selector], geometry.get_normals()),
@@ -44,11 +43,91 @@ class Reflective_IAM(object):
 		normals = geometry.get_normals()
 		directions = rays.get_directions()[:,selector]
 		vertical = N.sum(directions*normals, axis=0)*normals
-		theta_AOI = N.arccos(N.sqrt(N.sum(vertical**2)))
+		cos_theta_AOI = N.arccos(N.sqrt(N.sum(vertical**2)))
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=optics.reflections(directions, normals),
-			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-N.cos(theta_AOI)/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			parents=selector)
+		return outg
+
+	def reset(self):
+		pass
+
+class Reflective_mod_IAM(object):
+	'''
+	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
+	'''
+	def __init__(self, absorptivity, a_r, c):
+		self._abs = absorptivity
+		self.a_r = a_r
+		self.c = c
+	
+	def __call__(self, geometry, rays, selector):
+		normals = geometry.get_normals()
+		directions = rays.get_directions()[:,selector]
+		vertical = N.sum(directions*normals, axis=0)*normals
+		cos_theta_AOI = N.arccos(N.sqrt(N.sum(vertical**2)))
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			direction=optics.reflections(directions, normals),
+			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-self.c*N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			parents=selector)
+		return outg
+
+	def reset(self):
+		pass
+
+
+class Lambertian_IAM(object):
+	'''
+	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
+	'''
+	def __init__(self, absorptivity, a_r):
+		self._abs = absorptivity
+		self.a_r = a_r
+	
+	def __call__(self, geometry, rays, selector):
+		normals = geometry.get_normals()
+		directions = rays.get_directions()[:,selector]
+		vertical = N.sum(directions*normals, axis=0)*normals
+		cos_theta_AOI = N.sqrt(N.sum(vertical**2))
+
+		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
+		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
+
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			direction=directs,
+			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			parents=selector)
+		return outg
+
+	def reset(self):
+		pass
+
+class Lambertian_mod_IAM(object):
+	'''
+	Generates a function that performs specular reflections from an opaque absorptive surface modified by the Incidence Angle Modifier from: Martin and Ruiz: https://pvpmc.sandia.gov/modeling-steps/1-weather-design-inputs/shading-soiling-and-reflection-losses/incident-angle-reflection-losses/martin-and-ruiz-model/. 
+	'''
+	def __init__(self, absorptivity, a_r, c):
+		self._abs = absorptivity
+		self.a_r = a_r
+		self.c = c
+	
+	def __call__(self, geometry, rays, selector):
+		normals = geometry.get_normals()
+		directions = rays.get_directions()[:,selector]
+		vertical = N.sum(directions*normals, axis=0)*normals
+		cos_theta_AOI = N.sqrt(N.sum(vertical**2))
+
+		directs = sources.pillbox_sunshape_directions(len(selector), ang_range=N.pi/2.)
+		directs = N.sum(rotation_to_z(normals.T) * directs.T[:,None,:], axis=2).T
+
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			direction=directs,
+			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI**self.c/self.a_r))/(1.-N.exp(-1./self.a_r))),
 			parents=selector)
 		return outg
 
@@ -227,6 +306,10 @@ class PeriodicBoundary(object):
 	The ray intersections incident on the surface are translated by a given period in the direction of the surface normal, creating a perdiodic boundary condition.
 	'''
 	def __init__(self, period):
+		'''
+		Argument:
+		period: distance of periodic repetition. The ray positions are ranslated of period*normal vector for the next bundle, with same direction and energy.
+		'''
 		self.period = period
 		
 	def __call__(self, geometry, rays, selector):
@@ -251,13 +334,14 @@ class RefractiveHomogenous(object):
 	refracted ray moves is determined by toggling between the two possible
 	indices.
 	"""
-	def __init__(self, n1, n2):
+	def __init__(self, n1, n2, single_ray=False):
 		"""
 		Arguments:
 		n1, n2 - scalars representing the homogenous refractive index on each
 			side of the surface (order doesn't matter).
 		"""
 		self._ref_idxs = (n1, n2)
+		self._single_ray = single_ray
 	
 	def toggle_ref_idx(self, current):
 		"""
@@ -294,18 +378,139 @@ class RefractiveHomogenous(object):
 		# The output bundle is generated by stacking together the reflected and
 		# refracted rays in that order.
 		inters = geometry.get_intersection_points_global()
-		reflected_rays = rays.inherit(selector, vertices=inters,
-			direction=optics.reflections(
-				rays.get_directions()[:,selector],
-				geometry.get_normals()),
-			energy=rays.get_energy()[selector]*R,
-			parents=selector)
+		if self._single_ray:
+			# Draw probability of reflection or refraction out of the reflected energy of refraction events:
+			refl = N.logical_or(N.random.uniform(size=R[refr].shape)<R[refr], ~refr)
+			# reflected rays are TIR OR rays selected to go to reflection
+			sel_refl = selector[refl]
+			sel_refr = selector[~refl]
+			print len(selector), sel_refr, sel_refl
+			
+			reflected_rays = rays.inherit(sel_refl, vertices=inters[:,sel_refl],
+				direction=optics.reflections(
+					rays.get_directions()[:,sel_refl],
+					geometry.get_normals()),
+				energy=rays.get_energy()[sel_refl],
+				parents=sel_refl)
 		
-		refracted_rays = rays.inherit(selector[refr], vertices=inters[:,refr],
-			direction=out_dirs, parents=selector[refr],
-			energy=rays.get_energy()[selector][refr]*(1 - R[refr]),
-			ref_index=n2[refr])
+			refracted_rays = rays.inherit(sel_refr, vertices=inters[:,sel_refr],
+				direction=out_dirs[sel_refr], parents=sel_refr,
+				energy=rays.get_energy()[sel_refr],
+				ref_index=n2[sel_refr])
+			
+		else:
+			reflected_rays = rays.inherit(selector, vertices=inters,
+				direction=optics.reflections(
+					rays.get_directions()[:,selector],
+					geometry.get_normals()),
+				energy=rays.get_energy()[selector]*R,
+				parents=selector)
 		
+			refracted_rays = rays.inherit(selector[refr], vertices=inters[:,refr],
+				direction=out_dirs, parents=selector[refr],
+				energy=rays.get_energy()[selector][refr]*(1 - R[refr]),
+				ref_index=n2[refr])
+		
+		return reflected_rays + refracted_rays
+
+class RefractiveAbsorbantHomogenous(object):
+	'''
+	Same as RefractiveHomogenous but with absoption in the medium.
+	'''
+	def __init__(self, n1, n2, a1, a2, single_ray=False):
+		"""
+		Arguments:
+		n1, n2 - scalars representing the homogenous refractive index on each
+			side of the surface (order doesn't matter).
+		a1, a2 - coefficients in each side of the surface. a1 corrsponds to n1, a2 to n2.
+		"""
+		self._ref_idxs = (n1, n2)
+		self._att_coeffs = (a1, a2)
+		self._single_ray = single_ray
+
+	def toggle_ref_idx(self, current):
+		"""
+		Determines which refractive index to use based on the refractive index
+		rays are currently travelling through.
+
+		Arguments:
+		current - an array of the refractive indices of the materials each of 
+			the rays in a ray bundle is travelling through.
+		
+		Returns:
+		An array of length(n) with the index to use for each ray.
+		"""
+		return N.where(current == self._ref_idxs[0], 
+			self._ref_idxs[1], self._ref_idxs[0])
+
+	def get_att_coeff(self, current_n):
+		return N.where(current_n == self._ref_idxs[0], 
+			self._att_coeffs[0], self._att_coeffs[1])	
+
+	def __call__(self, geometry, rays, selector):
+		if len(selector) == 0:
+			return ray_bundle.empty_bund()
+		
+		n1 = rays.get_ref_index()[selector]
+		n2 = self.toggle_ref_idx(n1)
+		refr, out_dirs = optics.refractions(n1, n2, \
+			rays.get_directions()[:,selector], geometry.get_normals())
+
+		# The output bundle is generated by stacking together the reflected and
+		# refracted rays in that order.
+		inters = geometry.get_intersection_points_global()
+
+		# attenuation in current medium:
+		a = self.get_att_coeff(n1)
+		prev_inters = rays.get_vertices(selector)
+		path_lengths = N.sqrt(N.sum((inters-prev_inters)**2, axis=0))
+
+		energy = optics.attenuations(path_lengths=path_lengths, attenuation_coefficient=a, energy=rays.get_energy()[selector])
+
+		if not refr.any():
+			rays.set_energy(energy, selector=selector)
+			return perfect_mirror(geometry, rays, selector)
+		
+		# Reflected energy:
+		R = N.ones(len(selector))
+		R[refr] = optics.fresnel(rays.get_directions()[:,selector][:,refr],
+			geometry.get_normals()[:,refr], n1[refr], n2[refr])
+
+		if self._single_ray:
+			# Draw probability of reflection or refraction out of the reflected energy of refraction events:
+			refl = N.random.uniform(size=R.shape)<=R
+			# reflected rays are TIR OR rays selected to go to reflection
+			sel_refl = selector[refl]
+			sel_refr = selector[~refl]
+			dirs_refr = N.zeros((3, len(selector)))
+			dirs_refr[:,refr] = out_dirs
+			dirs_refr = dirs_refr[:,~refl]
+			
+			reflected_rays = rays.inherit(sel_refl, vertices=inters[:,refl],
+				direction=optics.reflections(
+					rays.get_directions()[:,sel_refl],
+					geometry.get_normals()[:,refl]),
+				energy=energy[refl],
+				parents=sel_refl)
+		
+			refracted_rays = rays.inherit(sel_refr, vertices=inters[:,~refl],
+				direction=dirs_refr, parents=sel_refr,
+				energy=energy[~refl],
+				ref_index=n2[~refl])
+			
+		else:
+			reflected_rays = rays.inherit(selector, vertices=inters,
+				direction=optics.reflections(
+					rays.get_directions()[:,selector],
+					geometry.get_normals()),
+				energy=energy*R,
+				parents=selector)
+		
+			refracted_rays = rays.inherit(selector[refr], vertices=inters[:,refr],
+				direction=out_dirs, parents=selector[refr],
+				energy=energy[refr]*(1 - R[refr]),
+				ref_index=n2[refr])
+
 		return reflected_rays + refracted_rays
 
 
@@ -458,6 +663,55 @@ class OneSidedReflective(Reflective):
 		outg.set_energy(energy)
 		return outg
 
+class BiFacial():
+	'''
+	This optical manager separates the optical response between front side (+z in general, depending on the geometry manager) and back side properties.
+	'''
+	def __init__(self, optics_callable_front, optics_callable_back):
+		self.optics_callable_front = optics_callable_front
+		self.optics_callable_back = optics_callable_back
+
+	def __call__(self, geometry, rays, selector):
+
+		proj = N.around(N.sum(rays.get_directions()[:,selector]*geometry.up()[:,None], axis=0), decimals=6)
+		back = proj > 0.
+		outg = []
+
+		if back.any():
+			outg.append(self.optics_callable_back.__call__(geometry, rays, selector).inherit(N.nonzero(back)[0]))
+		if ~back.all():
+			outg.append(self.optics_callable_front.__call__(geometry, rays, selector).inherit(N.nonzero(~back)[0]))
+
+		if len(outg)>1:
+			outg = ray_bundle.concatenate_rays(outg)
+		else: 
+			outg = outg[0]
+
+		return outg
+
+	def get_all_hits(self):
+		
+		try:
+			front_hits = self.optics_callable_front.get_all_hits()
+		except:
+			front_hits = []
+		try:
+			back_hits = self.optics_callable_back.get_all_hits()
+		except:
+			back_hits = []
+
+		return front_hits, back_hits
+
+	def reset(self):
+		try:
+			self.optics_callable_front.reset(self)
+		except:
+			pass
+		try:
+			self.optics_callable_back.reset(self)
+		except:
+			pass
+
 class OneSidedRealReflective(RealReflective):
 	"""
 	Adds directionality to an optics manager that is modelled to represent the
@@ -492,7 +746,6 @@ class SemiLambertianDetector(DirectionAccountant):
 	def __init__(self, absorptivity=0., ang_range=N.pi/2.):
 		DirectionAccountant.__init__(self, SemiLambertianReflector, absorptivity, ang_range=ang_range)
 
-<<<<<<< HEAD
 class LambertianSpecularReceiver(AbsorptionAccountant):
 	"""A wrapper around AbsorptionAccountant with LambertianSpecularReflector optics"""
 	def __init__(self, absorptivity=1., specularity=0.5):
@@ -503,8 +756,6 @@ class LambertianSpecularDetector(DirectionAccountant):
 	def __init__(self, absorptivity=1., specularity=0.5):
 		DirectionAccountant.__init__(self, LambertianSpecularReflector, absorptivity, specularity=specularity)
 
-=======
->>>>>>> 6fbe83d237378813b001c0b213783acad730e61f
 class IAMReceiver(AbsorptionAccountant):
 	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
 	def __init__(self, absorptivity=1., a_r=1.):
@@ -514,4 +765,34 @@ class IAMDetector(DirectionAccountant):
 	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
 	def __init__(self, absorptivity=1., a_r=1.):
 		DirectionAccountant.__init__(self, Reflective_IAM, absorptivity, a_r=a_r)
+
+class LambertianIAMReceiver(AbsorptionAccountant):
+	"""A wrapper around DirectionAccountant with Lambertian_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1.):
+		AbsorptionAccountant.__init__(self, Lambertian_IAM, absorptivity, a_r=a_r)
+
+class LambertianIAMDetector(DirectionAccountant):
+	"""A wrapper around DirectionAccountant with Lambertian_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1.):
+		DirectionAccountant.__init__(self, Lambertian_IAM, absorptivity, a_r=a_r)
+
+class ModIAMReceiver(AbsorptionAccountant):
+	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1., c=1.):
+		AbsorptionAccountant.__init__(self, Reflective_mod_IAM, absorptivity, a_r=a_r, c=c)
+
+class ModIAMDetector(DirectionAccountant):
+	"""A wrapper around DirectionAccountant with Refective_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1., c=1.):
+		DirectionAccountant.__init__(self, Reflective_mod_IAM, absorptivity, a_r=a_r, c=c)
+
+class LambertianModIAMReceiver(AbsorptionAccountant):
+	"""A wrapper around DirectionAccountant with Lambertian_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1., c=1.):
+		AbsorptionAccountant.__init__(self, Lambertian_mod_IAM, absorptivity, a_r=a_r, c=c)
+
+class LambertianModIAMDetector(DirectionAccountant):
+	"""A wrapper around DirectionAccountant with Lambertian_IAM optics"""
+	def __init__(self, absorptivity=1., a_r=1., c=1.):
+		DirectionAccountant.__init__(self, Lambertian_mod_IAM, absorptivity, a_r=a_r, c=c)
 

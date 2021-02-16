@@ -148,7 +148,7 @@ class FiniteFlatGM(FlatGeometryManager):
 			N.vstack((self._global, N.ones(self._global.shape[1]))))
 		
 		return ray_prms
-		
+	
 	def select_rays(self, idxs):
 		"""
 		Inform the geometry manager that only the given rays are to be used,
@@ -161,7 +161,7 @@ class FiniteFlatGM(FlatGeometryManager):
 		self._idxs = idxs
 		self._backside = N.nonzero(self._backside[idxs])[0]
 		self._global = self._global[:,idxs].copy()
-	
+
 class RectPlateGM(FiniteFlatGM):
 	"""
 	Trims the infinite flat surface by marking rays whose intersection with
