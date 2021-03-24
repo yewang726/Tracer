@@ -67,7 +67,7 @@ class Reflective_mod_IAM(object):
 		normals = geometry.get_normals()
 		directions = rays.get_directions()[:,selector]
 		vertical = N.sum(directions*normals, axis=0)*normals
-		cos_theta_AOI = N.arccos(N.sqrt(N.sum(vertical**2)))
+		cos_theta_AOI = N.sqrt(N.sum(vertical**2))
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
 			direction=optics.reflections(directions, normals),
