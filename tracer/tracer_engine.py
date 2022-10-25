@@ -127,7 +127,6 @@ class TracerEngine():
         surfs_relevancy = N.ones((num_surfs, bund.get_num_rays()), dtype=N.bool)
 
         for i in xrange(reps):
-
             front_surf, owned_rays = self.intersect_ray(bund, surfaces, objects, \
                 surf_ownership, ray_ownership, surfs_relevancy)
 
@@ -197,7 +196,6 @@ class TracerEngine():
             # Save only the last bundle. Don't bother moving weak rays to end.
             record = concatenate_rays(record)
             self.tree.append(record)
-        
         
         return bund.get_vertices(), bund.get_directions()
 

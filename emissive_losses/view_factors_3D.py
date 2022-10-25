@@ -13,7 +13,7 @@ from tracer.sources import *
 from tracer.tracer_engine_mp import *
 from tracer.CoIn_rendering.rendering import *
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 import time
 
@@ -22,20 +22,24 @@ class RTVF():
 	General class for view factor raytraces.
 	num_rays - number of rays fired per bundle
 	precision - confidence interval threshold on view factor values for each element and for the combination rule between all elements of the scene.
+	precision_rec - independent confidence interval threshold on the reciprocity rule between all elements of the scene.
 	'''
-	def __init__(self, num_rays=10000, precision=0.01):
+	def __init__(self, num_rays=10000, precision=0.01, precision_option='absolute', precision_rec=None):
 		self.num_rays = num_rays
 		self.precision = precision
+		if precision_rec ==None:
+			self.precision_rec = precision
+		else:	
+			self.precision_rec = precision_rec
 		self.stdev = N.inf
+		self.precision_option = precision_option
 
 	def reset_opt(self):
 		'''
 		Optics reset script to be able to raytrace again the same object without having energy already stored on the surfaces.
 		'''
-		S = self.A.get_surfaces()
-		
-		for i in xrange(len(S)):
-			self.A.get_surfaces()[i].get_optics_manager().reset()
+		for S in self.A.get_surfaces():
+			S.get_optics_manager().reset()
 	
 	def test_precision(self):
 		'''
@@ -49,84 +53,76 @@ class RTVF():
 		p = N.vstack(self.p)
 		p_1 = p-r
 
-		# Summation rule enforced:
+		# Areas
 		Ai = N.ones(N.shape(self.VF_esperance))*N.vstack(self.areas)
 
-		# Online weighted standard deviation calculation
+		# Online weighted standard deviation calculation variable
 		self.Qsum = self.Qsum + r*p_1/p*(self.VF-self.VF_esperance)**2.
+		self.stdev_VF = 3.*N.sqrt(self.Qsum/(p-1.))/N.sqrt(p)
+
+		# Expected value = weighted average
 		self.VF_esperance = (self.VF_esperance*p_1+self.VF*r)/p
+
+		# Reciprocity rule variables
 		AiFij = self.VF_esperance*Ai
 		AjFji = AiFij.T
-		self.stdev_VF = N.sqrt(self.Qsum/p_1)
+		self.VF_reciprocity = N.abs(AiFij-AjFji)
 
 		# Evaluation of the relative precision of the evaluation
-		stdev_test = ((self.stdev_VF/N.sqrt(p/r)) <= (self.precision/3.)).all(axis=1) # absolute precision on the VFs
-		#stdev_test = (self.stdev_VF/self.VF_esperance <= (self.precision/3.)).all(axis=1) # relative precision on the VFs
-		# Reciprocity rule
-		self.VF_reciprocity = (AiFij-AjFji)/2.
-		reciprocity_test = (N.abs(self.VF_reciprocity) <= self.precision).all(axis=1) # for absolute precision
+		if self.precision_option == 'absolute':
+			stdev_test = self.stdev_VF <= self.precision/2.
+
+			tas = self.stdev_VF*Ai
+			reciprocity_test = (tas+(tas.T)) <= self.precision_rec
+
+
+		elif self.precision_option == 'relative':
+			rel_stdev = (self.stdev_VF/self.VF_esperance)
+			rel_stdev[N.isnan(rel_stdev)] = 0.
+			stdev_test = rel_stdev <= self.precision # relative precision on the VFs
+
+			tas = Ai*self.stdev_VF
+			rel_rec = (tas+(tas.T))/AiFij
+			rel_rec[N.isnan(rel_rec)] = 0.
+			rel_rec[N.isinf(rel_rec)] = 0.
+
+			reciprocity_precision = rel_rec <= self.precision_rec
+
+			# Minimum precision condition for surfaces with negligible contribution: (this is to speed up the process when some surfaces have a small surface and a very small view factor to another one)
+			minimum_AF_test = AiFij < N.vstack((self.precision_rec*N.amax(AiFij, axis=1)))
+
+			reciprocity_test = N.logical_or(reciprocity_precision, minimum_AF_test)
+
 		# Summation rule
 		summ_test = N.abs(N.sum(self.VF_esperance, axis=1)-1.) < self.precision
 
 		# Minimum precision condition for surfaces with negligible contribution: (this is to speed up the process when some surfaces have a small surface and a very small view factor to another one)
 		#minimum_VF_test = AiFij < self.precision 
-
 		# Simulation progress switch to determine which surfaces need to cast more rays
 		self.progress = N.logical_not(N.logical_and(summ_test, N.logical_and(stdev_test, reciprocity_test)))
-		#self.progress = N.logical_not(N.logical_and(summ_test, stdev_test))
 
-		#'''
-		if self.progress.any():
-			print N.hstack(N.argwhere(self.progress))
-		N.set_printoptions(suppress = True)
-		print 'VF_esperance'
-		print N.round(self.VF_esperance, decimals=4)
-		print 'stdev/3'
-		print N.round(self.stdev_VF*3./N.sqrt(self.p/self.ray_counts), decimals=4)
-		print 'Reciprocity'
-		print N.round(self.VF_reciprocity, decimals=4)
-		print 'Summation'
-		print N.abs(N.sum(self.VF_esperance, axis=1))
-		#'''
+		#print 'Progress:', N.hstack(N.argwhere((self.progress==True).any(axis=1)))
+		#print 'Stdev:', N.hstack(N.argwhere((stdev_test==False).any(axis=1)))
+		#print 'Reciprocity:', N.hstack(N.argwhere((reciprocity_test==False).any(axis=1)))
+		#print 'Summation:', N.hstack(N.argwhere((summ_test==False).any(axis=1)))
 		'''
-		if self.progress.any():
-			print N.hstack(N.argwhere(self.progress))
-		plt.subplots_adjust(bottom=0.15)
-		plt.subplot(131)
-		plt.scatter(N.vstack(self.p)*N.ones(N.shape(self.stdev_VF)), 3.*self.stdev_VF/N.sqrt(self.p/self.ray_counts))
-		plt.axhline(self.precision)
-		plt.xlabel('Standard deviation')
-		plt.subplot(132)
-		plt.scatter(N.vstack(self.p), N.abs(N.sum(self.VF_esperance, axis=1)-1.))
-		plt.xlabel('Summation rule')
-		plt.axhline(self.precision)
-		plt.subplot(133)
-		plt.axhline(self.precision)
-		plt.scatter(N.vstack(self.p)*N.ones(N.shape(self.VF_reciprocity)), N.abs(self.VF_reciprocity))
-		plt.xlabel('Reciprocity rule')
-
-		plt.savefig(open('/home/charles/Documents/Tracer/emissive_losses/test.png','w'))
-		#'''
-
+		for f in xrange(N.shape(AiFij)[0]):
+			if (reciprocity_test[f]==False).any():
+				print N.amax(AiFij[f,reciprocity_test[f]==False])/N.amax(AiFij[f])
 		'''
-		plt.scatter(N.vstack(self.p)*N.ones(N.shape(self.stdev_VF)), self.VF_esperance, marker='+', zorder=10)
-		#plt.scatter(N.vstack(self.p)*N.ones(N.shape(self.stdev_VF)), self.VF_esperance-3.*self.stdev_VF, marker='+', color='k')
-		#plt.scatter(N.vstack(self.p)*N.ones(N.shape(self.stdev_VF)), self.VF_esperance+3.*self.stdev_VF, marker='+', color='k')
-		plt.scatter(N.vstack(self.p)*N.ones(N.shape(self.stdev_VF)), self.VF, marker='+', color='k')
-
-		plt.savefig(open('/home/charles/Documents/Tracer/emissive_losses/test.png','w'))
-		#'''
 
 class FONaR_RTVF(RTVF):
 	'''
 	FONaR view factor calculation class.
+	Needs to manually add the aperture inthe child class.
+	Imports directy a nice FONaR object with the binning scheme array etc. The receiver type is 'Surround' for the axisymmetrical concept and 'Polar' for a polar field facing cavity. This is important for the ray casting directions and handling of passive surfaces.
 	'''
-	def __init__(self, Assembly, binning_scheme, areas, num_rays=10000, precision=0.01):
-		RTVF.__init__(self, num_rays, precision)
+	def __init__(self, Assembly, binning_scheme, areas, num_rays=10000, precision=0.01, precision_option='absolute', precision_rec=None, receiver_type='Surround', procs=8):
+		RTVF.__init__(self, num_rays, precision, precision_option, precision_rec)
+		self.receiver_type = receiver_type
 		self.binning_scheme = binning_scheme
 		self.areas = areas
-		procs = 8 # number of CPUs to be used
-
+		
 		self.t0 = time.clock()
 
 		self.VF = N.zeros((N.shape(binning_scheme)[0], N.shape(binning_scheme)[0]))
@@ -140,45 +136,54 @@ class FONaR_RTVF(RTVF):
 
 		self.p = N.zeros(N.shape(self.VF)[0])
 
-		self.ray_counts = N.ones(len(areas))*int(self.num_rays)
+		self.ray_counts = N.ones(len(areas))*self.num_rays
 
 		vf_tracer = TracerEngineMP(Assembly)
 		vf_tracer.itmax = 1 # stop iteration after this many ray bundles were generated (i.e. after the original rays intersected some surface this many times).
 		vf_tracer.minener = 1e-15 # minimum energy threshold
-		stable_stats = 0
+		stable_stats = N.zeros(N.shape(self.progress))
+		stat_cond = 2
 
-		#import matplotlib.pyplot as plt
-		#plt.figure()
-
-		while (self.progress==True).any() or stable_stats<3:
+		while (self.progress==True).any() or (stable_stats<stat_cond).any():
 			self.ray_counts = N.zeros(N.shape(self.VF)[0])
 			tp = time.clock()
 			for i in xrange(N.shape(self.VF)[0]):
-				if (self.progress[i]==True).any():
+				if (self.progress[i,:]==True).any() or (stable_stats[i,:]<stat_cond).any():
 					disc = binning_scheme[i,1,1] == binning_scheme[i,1,0]
 					up = binning_scheme[i,1,1] > binning_scheme[i,1,0]
 
-					apbottom = i==0
-					apcyl = i==1
-					aptop = i==2
+					if receiver_type == 'Surround':
+						apbottom = i==0
+						apcyl = i==1
+						aptop = i==2
+						if i < 3:
+							rays_in = True
+						elif up:
+							rays_in = False
+						else:
+							rays_in = True
 
-					if i < 3:
-						rays_in = True
-					elif up:
-						rays_in = False
-					else:
-						rays_in = True
+					elif receiver_type == 'Polar':
+						ap = i==0
+						if up:
+							rays_in = True
+						else:
+							rays_in = False
 
 					S = []
-					for p in xrange(procs):
+					for pr in xrange(procs):
 						source = self.gen_source(binning_scheme[i], num_rays, rays_in, procs)
 						if disc:
 							if i>0:
 								outwards = binning_scheme[i,2,1] > binning_scheme[i,2,0]
-								if aptop:
-									source._directions = -source._directions
-								elif outwards:
-									if ~apbottom:
+								if receiver_type == 'Surround':		
+									if aptop:
+										source._directions = -source._directions
+									elif outwards:
+										if ~apbottom:
+											source._directions = -source._directions
+								if receiver_type == 'Polar':
+									if ~outwards:
 										source._directions = -source._directions
 						S.append(source)
 
@@ -187,37 +192,39 @@ class FONaR_RTVF(RTVF):
 					#if i%10==0.:
 					#	print 'Surface ',i,'/', N.shape(self.VF)[0]
 					'''
-					if i == 4:# N.shape(self.VF)[0]-1:
+					if i == 0:#(N.shape(self.VF)[0]-(31+32)):# N.shape(self.VF)[0]-1:
 						view = Renderer(vf_tracer)
 						view.show_rays()
+						#view.show_geom()
 						stop
 					#'''
 					self.alloc_VF(i)
-					self.ray_counts[i] = int(self.num_rays)
+					self.ray_counts[i] = self.num_rays
+
 			self.p += self.ray_counts
 			self.test_precision()
 			#N.set_printoptions(formatter={'float': '{: 0.2f}'.format})
+
 			#print N.round(self.VF, decimals=2)
-			print '		Progress:', N.sum(self.progress),'/', len(self.progress),'; Pass duration:', time.clock()-tp, 's'
+			print '		Progress:', N.sum(self.progress),'/', N.size(self.progress),',', N.sum(N.sum(self.progress, axis=1)>0),'/', N.shape(self.progress)[0],'; Pass duration:', time.clock()-tp, 's'
 
+			stable_stats[self.progress==False] += 1
 
-			if N.sum(self.progress) == 0:
-				stable_stats +=1
 		t1=time.clock()-self.t0
 		print '	VF calculation time:',t1,'s'
 
 
 	def gen_source(self, ahr, num_rays, rays_in, procs):
 		center = N.vstack([0,0,ahr[1,0]])
-		if ahr[2,0]==ahr[2,1]:
+		if ahr[2,0] == ahr[2,1]:
 			S = vf_cylinder_bundle(num_rays=num_rays, rc=ahr[2,0], lc=ahr[1,1]-ahr[1,0], center=center, direction=N.array([0,0,N.sign(ahr[1,1]-ahr[1,0])]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
 		elif ahr[1,0]==ahr[1,1]:
 			S = solar_disk_bundle(num_rays=num_rays, center=center, direction=N.array([0,0,1]), radius=ahr[2,1], ang_range=N.pi/2., procs=procs, radius_in=ahr[2,0], angular_span=ahr[0])
 		else:
 			if ahr[1,1] > ahr[1,0]:
 				if ahr[2,0]>ahr[2,1]:
-					center = N.vstack([0,0,ahr[1,1]])
-					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,1], r1=ahr[2,0], depth=ahr[1,1]-ahr[1,0], center=center, direction=N.array([0,0,-1.]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
+					#center = N.vstack([0,0,ahr[1,1]])
+					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,0], r1=ahr[2,1], depth=ahr[1,1]-ahr[1,0], center=center, direction=N.array([0,0,1]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
 				else:
 					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,0], r1=ahr[2,1], depth=ahr[1,1]-ahr[1,0], center=center, direction=N.array([0,0,1]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
 			else:
@@ -226,78 +233,115 @@ class FONaR_RTVF(RTVF):
 					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,1], r1=ahr[2,0], depth=N.abs(ahr[1,1]-ahr[1,0]), center=center, direction=N.array([0,0,1]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
 				else:
 					S = vf_frustum_bundle(num_rays=num_rays, r0=ahr[2,0], r1=ahr[2,1], depth=N.abs(ahr[1,1]-ahr[1,0]), center=center, direction=N.array([0,0,-1.]), rays_in=rays_in, procs=procs, angular_span=ahr[0])
+
 		return S
 
 	def alloc_VF(self, n):
 
+		if self.receiver_type == 'Surround':
+			ap_index = 3
 
-		AP = self.A.get_objects()[0]
-		ENV_bot = self.A.get_objects()[1]
-		ABS = self.A.get_objects()[2]
-		ENV_top = self.A.get_objects()[3]
+			AP = self.A.get_objects()[0]
+			ENV_bot = self.A.get_objects()[1]
+			ABS = self.A.get_objects()[2]
+			ENV_top = self.A.get_objects()[3]
 
-		# Aperture: 3 surfaces
-		Aperture_bot_abs, Aperture_bot_hits = AP.get_surfaces()[0].get_optics_manager().get_all_hits()
-		Aperture_cyl_abs, Aperture_cyl_hits = AP.get_surfaces()[1].get_optics_manager().get_all_hits()
-		Aperture_top_abs, Aperture_top_hits = AP.get_surfaces()[2].get_optics_manager().get_all_hits()
+			# Aperture: 3 surfaces
+			Aperture_bot_abs, Aperture_bot_hits = AP.get_surfaces()[0].get_optics_manager().get_all_hits()
+			Aperture_cyl_abs, Aperture_cyl_hits = AP.get_surfaces()[1].get_optics_manager().get_all_hits()
+			Aperture_top_abs, Aperture_top_hits = AP.get_surfaces()[2].get_optics_manager().get_all_hits()
 
-		# Absorber surfaces
-		ABS_surfs = ABS.get_surfaces()
-		Absorber_abs, Absorber_hits = ABS_surfs[0].get_optics_manager().get_all_hits()
-		for s in xrange(1,len(ABS_surfs)):
-			abso, hits = ABS_surfs[s].get_optics_manager().get_all_hits()
-			Absorber_abs = N.concatenate((Absorber_abs, abso))
-			Absorber_hits = N.concatenate((Absorber_hits, hits), axis=1)
+			# Absorber surfaces
+			ABS_surfs = ABS.get_surfaces()
+			Absorber_abs, Absorber_hits = ABS_surfs[0].get_optics_manager().get_all_hits()
+			for s in xrange(1,len(ABS_surfs)):
+				abso, hits = ABS_surfs[s].get_optics_manager().get_all_hits()
+				Absorber_abs = N.concatenate((Absorber_abs, abso))
+				Absorber_hits = N.concatenate((Absorber_hits, hits), axis=1)
 
-		if len(ENV_bot.get_surfaces())>1:
-			# Envelope bot cylinder: 
-			Envelope_bot_abs, Envelope_bot_hits = ENV_bot.get_surfaces()[0].get_optics_manager().get_all_hits()
-			# Envelope top cylinder:
-			Envelope_top_abs, Envelope_top_hits = ENV_top.get_surfaces()[0].get_optics_manager().get_all_hits()
-			# Regroup envelopes
-			Envelope_abs = N.concatenate((Envelope_bot_abs, Envelope_top_abs))
-			Envelope_hits = N.concatenate((Envelope_bot_hits, Envelope_top_hits), axis=1)
+			if len(ENV_bot.get_surfaces())>1:
+				# Envelope bot cylinder: 
+				Envelope_bot_abs, Envelope_bot_hits = ENV_bot.get_surfaces()[0].get_optics_manager().get_all_hits()
+				# Envelope top cylinder:
+				Envelope_top_abs, Envelope_top_hits = ENV_top.get_surfaces()[0].get_optics_manager().get_all_hits()
+				# Regroup envelopes
+				Envelope_abs = N.concatenate((Envelope_bot_abs, Envelope_top_abs))
+				Envelope_hits = N.concatenate((Envelope_bot_hits, Envelope_top_hits), axis=1)
 
-			# Regroup all receiver hits
-			Receiver_abs = N.concatenate((Envelope_abs, Absorber_abs))
-			Receiver_hits = N.concatenate((Envelope_hits, Absorber_hits), axis=1)
-		else:
-			Receiver_abs = Absorber_abs
-			Receiver_hits = Absorber_hits
+				# Regroup all receiver hits
+				Receiver_abs = N.concatenate((Envelope_abs, Absorber_abs))
+				Receiver_hits = N.concatenate((Envelope_hits, Absorber_hits), axis=1)
+			else:
+				Receiver_abs = Absorber_abs
+				Receiver_hits = Absorber_hits
 
-		# Aperture:
-		self.VF[n,0] = N.sum(Aperture_bot_abs)
-		self.VF[n,1] = N.sum(Aperture_cyl_abs)
-		self.VF[n,2] = N.sum(Aperture_top_abs)
+			# Aperture:
+			self.VF[n,0] = N.sum(Aperture_bot_abs)
+			self.VF[n,1] = N.sum(Aperture_cyl_abs)
+			self.VF[n,2] = N.sum(Aperture_top_abs)
+
+		elif self.receiver_type == 'Polar':
+
+			# Aperture:
+			ap_index = 1
+			AP = self.A.get_objects()[0]
+			self.VF[n,0] = N.sum(AP.get_surfaces()[0].get_optics_manager().get_all_hits()[0])
+
+			# Rest of the absorber:
+			ABS = self.A.get_objects()[1:]
+	
+			absos = []
+			hitss = []
+
+			for o in xrange(len(ABS)):
+				abso, hits = ABS[o].get_surfaces()[0].get_optics_manager().get_all_hits()
+				absos.append(abso)
+				hitss.append(hits)
+			Receiver_abs = N.hstack(absos)
+			Receiver_hits = N.concatenate(hitss, axis=1)
 
 		# Get the angles out of the cartesian coordinates:
-		angles_receiver = N.arctan(Receiver_hits[1]/Receiver_hits[0])
-		angles_receiver[Receiver_hits[0]<0.] = N.pi+angles_receiver[Receiver_hits[0]<0.]
-		angles_receiver[N.logical_and(Receiver_hits[0]>0.,Receiver_hits[1]<0.)] = 2.*N.pi+angles_receiver[N.logical_and(Receiver_hits[0]>0.,Receiver_hits[1]<0.)]
+		angles_receiver = N.arctan2(Receiver_hits[1],Receiver_hits[0])
+		angles_receiver[angles_receiver<0.] = angles_receiver[angles_receiver<0.]+2.*N.pi
 
 		# Get the radii from the cartesian coordinates:
 		radii_receiver = N.around(N.sqrt(Receiver_hits[0]**2.+Receiver_hits[1]**2.),decimals=9)
 
-		for i in xrange(N.shape(self.VF)[0]-3):
-			ahr = self.binning_scheme[i+3]
+		for i in xrange(N.shape(self.VF)[0]-ap_index):
+
+			ahr = self.binning_scheme[i+ap_index]
 
 			ang0 = ahr[0,0]
 			ang1 = ahr[0,1]
-			h0 = ahr[1,0]
-			h1 = ahr[1,1]
-			r0 = N.around(ahr[2,0],decimals=9)
-			r1 = N.around(ahr[2,1],decimals=9)
+			h0 = N.around(ahr[1,0], decimals=9)
+			h1 = N.around(ahr[1,1], decimals=9)
+			r0 = N.around(ahr[2,0], decimals=9)
+			r1 = N.around(ahr[2,1], decimals=9)
+
 			if r0>r1:
 				r0,r1 = r1,r0
 			if h0>h1:
 				h0,h1 = h1,h0
 
-			hit_in_ang = N.logical_and(angles_receiver>=ang0, angles_receiver<ang1)	
-			hit_in_h = N.logical_and(Receiver_hits[2]>=h0, Receiver_hits[2]<h1)
-			hit_in_r = N.logical_and(radii_receiver>=r0, radii_receiver<=r1)
-			
-			hit_in_bin = N.logical_and(N.logical_and(hit_in_ang, hit_in_h), hit_in_r)
+			# Some floating point errors around here,
+			hit_in_ang = N.logical_and(angles_receiver>=ang0, angles_receiver<=ang1)
+
+			if h0==h1:
+				hit_in_h = N.logical_and(Receiver_hits[2]>=h0, Receiver_hits[2]<=h1)
+			else:
+				hit_in_h = N.logical_and(Receiver_hits[2]>=h0, Receiver_hits[2]<=h1)
+
+			if r0==r1:
+				hit_in_r = N.logical_and(radii_receiver>=r0, radii_receiver<=r1)	
+			else:
+				hit_in_r = N.logical_and(radii_receiver>=r0, radii_receiver<=r1)
+
+
+			hit_in_bin = hit_in_ang*hit_in_h*hit_in_r
+
 			hit_abs = N.sum(Receiver_abs[hit_in_bin])
+
+			self.VF[n,i+ap_index] = hit_abs
 
 			# This is to speed up the process: we empty the hits containers as we assign and consequently browse through the remaining ones faster. We break the loop as soon as the containers are empty
 			Receiver_abs = Receiver_abs[~hit_in_bin]
@@ -305,8 +349,8 @@ class FONaR_RTVF(RTVF):
 			angles_receiver = angles_receiver[~hit_in_bin]
 			radii_receiver = radii_receiver[~hit_in_bin]
 
-			self.VF[n,i+3] = hit_abs
 			if len(Receiver_abs) == 0:
+				'zeroleft'
 				break
 
 		self.reset_opt()
@@ -437,7 +481,7 @@ class Two_N_parameters_cavity_RTVF(RTVF):
 		vf_tracer.itmax = 1 # stop iteration after this many ray bundles were generated (i.e. after the original rays intersected some surface this many times).
 		vf_tracer.minener = 1e-10 # minimum energy threshold
 		stable_stats = 0
-		while (self.progress==True).any() or stable_stats<3:
+		while (self.progress==True).any() or stable_stats<2:
 
 			tp = time.clock()
 

@@ -50,7 +50,6 @@ class TestParabolicDishGM(unittest.TestCase):
         bund.set_vertices(position)
         bund.set_directions(dir)
         self.bund = bund
-        
         self.correct = N.r_[1., N.sqrt(2), N.sqrt(11**2 + 4)]
         
     def test_circular_aperture(self):
@@ -68,8 +67,4 @@ class TestParabolicDishGM(unittest.TestCase):
         
         N.testing.assert_array_almost_equal(prm[:3], self.correct)
         self.failUnless(prm[3] == N.inf)
-
-if __name__ == '__main__':
-    unittest.main()
-
 

@@ -61,6 +61,7 @@ class QuadricGM(GeometryManager):
         delta = B**2. - 4.*A*C
         any_inters = delta >= 1e-6
         num_inters = any_inters.sum()
+
         if num_inters == 0:
             self._vertices = vertices
             self._params = params #
@@ -79,6 +80,7 @@ class QuadricGM(GeometryManager):
         is_linear = A == 0
         # Identify B = 0 cases
         is_Bnull = B == 0
+
         # Solve linear intersections        
         hits[:,is_linear & ~is_Bnull] = N.tile(-C[is_linear & ~is_Bnull]/B[is_linear & ~is_Bnull], (2,1))     
         # Solve B = 0 cases (give bad information on N.sign(0))
@@ -103,7 +105,7 @@ class QuadricGM(GeometryManager):
         
         # Storage for later reference:
         self._vertices = vertices
-        self._params = params #
+        self._params = params
   
         return params
     
@@ -125,6 +127,7 @@ class QuadricGM(GeometryManager):
         Returns:
         The index of the selected intersection, or None if neither will do.
         """
+
         is_positive = prm > 1e-6
         select = N.empty(prm.shape[1])
         select.fill(N.nan)

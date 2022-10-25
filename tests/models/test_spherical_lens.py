@@ -29,7 +29,6 @@ class Biconvex(unittest.TestCase):
         
         e = TracerEngine(Assembly([self.lens, screen]))
         vert, _ = e.ray_tracer(rb, 3, 1e-6)
-        
         self.failUnlessAlmostEqual(vert[1,2], 0, 4)
     
     def test_cylinder(self):

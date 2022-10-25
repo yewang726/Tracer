@@ -1,5 +1,5 @@
 
-tracer - a Pythonic ray-tracing package with solar energy focus.
+Tracer - a Pythonic ray-tracing package with solar energy focus.
 
 About
 -----
@@ -38,22 +38,31 @@ Open-source python magic happens: if you want to do something, you can do it.
 
 Installation
 ------------
-To install Tracer on your system, run the following from the command line:
+LINUX:
+To install Tracer on your system, run the following from the command line from your downloaded Tracer directory:
 
   python setup.py install
 
 Before installing, make sure that the following dependencies are installed:
-- Numpy/Scipy: http://www.scipy.org/scipylib/download.html
-- Matplotlib: http://matplotlib.org/downloads.html
-- Coin 3D: https://bitbucket.org/Coin3D/coin/downloads
-- Git: https://help.github.com/articles/set-up-git/
-- Pathos: https://github.com/uqfoundation/pathos
+- Numpy/Scipy (http://www.scipy.org/scipylib/download.html)
+  command: sudo apt-get install python-numpy
 
-To test that most things are working, run the test-suite in the tests/
-subdirectory, using nosetests or some similar tool.
+- Matplotlib (http://matplotlib.org/downloads.html)
+  command: sudo apt-get install python-matplotlib
 
-Also check out examples/test_case.py as a starting-point to the code. Running it
-requires Matplotlib to be installed.
+- Coin 3D (https://bitbucket.org/Coin3D/coin/downloads)
+  command: sudo apt-get install python-pivy
+
+- Pathos (https://github.com/uqfoundation)
+  This one requires you to download the packages from the github repository and run the installs individually using "python setup.py install" in your downloaded directories. All the dependencies (dill, pox, multiprocess and ppft) are on the same github repository and should be installed individually.
+
+WINDOWS:
+To run on MS Windows:
+- Follow steps on this link to run a Linux distribution on windows: https://docs.microsoft.com/en-us/windows/wsl/install-win10
+- Download Tracer packages from here
+- Download an X Server for windows in order to render the images: https://sourceforge.net/projects/xming/
+- Run the X Server Client
+- Run Tracer
 
 Getting Help, Getting Involved
 ------------------------------

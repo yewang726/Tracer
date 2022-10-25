@@ -33,6 +33,20 @@ class Assembly(HasFrame):
         
         HasFrame.__init__(self, location, rotation)
 
+    def global_to_local(self, points):
+		"""
+		Transform a set of points in the global coordinates back into the frame
+		used during tracing.
+		
+		Arguments:
+		points - a 3 x n array for n 3D points
+		
+		returns:
+		local - a 3 x n array with the respective points in local coordinates.
+		"""
+		proj = N.round(N.linalg.inv(self._temp_frame), decimals=9)
+		return N.dot(proj, N.vstack((points, N.ones(points.shape[1]))))
+
     def get_local_objects(self):
         """
         Get the list of objects belonging directly to this assembly, without
@@ -85,7 +99,7 @@ class Assembly(HasFrame):
         transform - the transformation matrix (as an array object) that describes the 
             new assembly in the coordinate system of the current assembly
         """
-        if transform == None:
+        if transform is None:
             transform = N.eye(4)
         self._assemblies.append(assembly)
         assembly.set_transform(transform)
@@ -131,13 +145,13 @@ class Assembly(HasFrame):
         for obj in self._assemblies + self._objects:
             obj.transform_children(N.dot(assembly_transform, const_t))
 
-    def get_scene_graph(self,resolution):
+    def get_scene_graph(self,resolution, fluxmap, trans, vmin, vmax):
         n = self.get_scene_graph_transform()
 
         for obj in self._assemblies:
-            n.addChild(obj.get_scene_graph(resolution))
+            n.addChild(obj.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
         for obj in self._objects:
-            n.addChild(obj.get_scene_graph(resolution))
+            n.addChild(obj.get_scene_graph(resolution, fluxmap, trans, vmin, vmax))
         return n
 
 # vim: et:ts=4

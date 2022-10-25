@@ -18,6 +18,7 @@ from tracer.object import AssembledObject
 
 from tracer.surface import Surface
 from tracer.flat_surface import FlatGeometryManager
+from tracer.flat_surface import RoundPlateGM
 import tracer.optics_callables as opt
 
 from tracer.spatial_geometry import general_axis_rotation, rotx, translate
@@ -246,16 +247,16 @@ class TestNestedAssemblies(unittest.TestCase):
         """
         # focal length = 1, thickness = 1/6
         R = 1./6.
-        back_surf = Surface(HemisphereGM(R), opt.RefractiveHomogenous(1., 1.5),
-            location=N.r_[0., 0., -R/2.])
-        front_surf = Surface(HemisphereGM(R), opt.RefractiveHomogenous(1., 1.5),
-            location=N.r_[0., 0., R/2.], rotation=rotx(N.pi/2.)[:3,:3])
-        front_lens = AssembledObject(surfs=[back_surf, front_surf])
+        back_surf = Surface(HemisphereGM(R), opt.RefractiveHomogenous(1., 1.5), location=N.r_[0., 0., -R/2.])
+        front_surf = Surface(HemisphereGM(R), opt.RefractiveHomogenous(1., 1.5),location=N.r_[0., 0., R/2.], rotation=rotx(N.pi/2.)[:3,:3])
         
-        back_surf = Surface(FlatGeometryManager(), opt.RefractiveHomogenous(1., 1.5),
+        front_lens = AssembledObject(surfs=[back_surf, front_surf])
+
+        back_surf = Surface(RoundPlateGM(R), opt.RefractiveHomogenous(1., 1.5),
             location=N.r_[0., 0., -0.01])
-        front_surf = Surface(FlatGeometryManager(), opt.RefractiveHomogenous(1., 1.5),
+        front_surf = Surface(RoundPlateGM(R), opt.RefractiveHomogenous(1., 1.5),
             location=N.r_[0., 0., 0.01])
+
         glass_screen = AssembledObject(surfs=[back_surf, front_surf],
             transform=translate(0., 0., 0.5))
         
@@ -275,7 +276,8 @@ class TestNestedAssemblies(unittest.TestCase):
         bund.set_ref_index(N.r_[1])
         
         self.engine.ray_tracer(bund, 15, 10.)
-        non_degenerate = self.engine.tree[-1].get_energy() > 10
+
+        non_degenerate = self.engine.tree[-1].get_energy() > 10.
         v = self.engine.tree[-1].get_vertices()[:,non_degenerate]
         d = self.engine.tree[-1].get_directions()[:,non_degenerate]
         # Not high equality demanded, because of spherical aberration.
@@ -284,4 +286,3 @@ class TestNestedAssemblies(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

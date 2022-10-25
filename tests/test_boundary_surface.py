@@ -81,8 +81,8 @@ class TestSphereBoundingRect(unittest.TestCase):
         sqrt_h = N.sqrt(0.5)
         sqrt_35 = N.sqrt(3.5)
         extents = sphere.bounding_rect_for_plane(self.at_origin_slant)
-        self.failUnlessEqual(extents, \
-            (sqrt_h - sqrt_35, sqrt_h + sqrt_35, -sqrt_35, sqrt_35))
+        N.testing.assert_array_almost_equal(extents, \
+            (sqrt_h - sqrt_35, sqrt_h + sqrt_35, -sqrt_35, sqrt_35), decimal=14)
 
         extents = sphere.bounding_rect_for_plane(self.parallel_xy)
         self.failUnlessEqual(extents, (1 - sqrt_3, 1 + sqrt_3, -sqrt_3, sqrt_3))
@@ -94,8 +94,3 @@ class TestSphereBoundingRect(unittest.TestCase):
         extents = sphere.bounding_rect_for_plane(self.parallel_slanted)
         N.testing.assert_array_almost_equal(extents, \
             (sqrt_h - Reff, sqrt_h + Reff, -Reff, Reff))
-
-if __name__ == '__main__':
-    unittest.main()
-
-

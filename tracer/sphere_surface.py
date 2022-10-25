@@ -82,10 +82,12 @@ class SphericalGM(QuadricGM):
         x, y, z - each a 2D array holding in its (i,j) cell the x, y, and z
             coordinate (respectively) of point (i,j) in the mesh.
         """
-        rng = N.pi + 1./(self._rad*resolution)
+        if resolution == None:
+            resolution=40.
+        rng = N.pi + 1./(resolution)
         theta, phi = N.ogrid[
-            0:rng:1./(self._rad*resolution),
-            0:2*rng:1./(self._rad*resolution)]
+            0:rng:1./(resolution),
+            0:2*rng:1./(resolution)]
         
         x = self._rad * N.sin(theta) * N.cos(phi)
         y = self._rad * N.sin(theta) * N.sin(phi)
@@ -109,7 +111,7 @@ class HemisphereGM(SphericalGM):
         coords = N.concatenate((coords, N.ones((2,1,coords.shape[2]))), axis=1)
         local = N.sum(N.linalg.inv(self._working_frame)[None,:,:,None] * \
             coords[:,None,:,:], axis=2)
-        bottom_hem = (local[:,2,:] <= 0) & (prm > 0)
+        bottom_hem = (local[:,2,:] <= 0) & (prm > 1e-6)
         
         select[~N.logical_or(*bottom_hem)] = N.nan
         one_hit = N.logical_xor(*bottom_hem)
@@ -131,10 +133,12 @@ class HemisphereGM(SphericalGM):
         x, y, z - each a 2D array holding in its (i,j) cell the x, y, and z
             coordinate (respectively) of point (i,j) in the mesh.
         """
-        rng = N.pi + 1./(self._rad*resolution)
+        if resolution == None:
+            resolution=40.
+        rng = N.pi + 1./(resolution)
         theta, phi = N.ogrid[
-            N.pi/2:rng:1./(self._rad*resolution),
-            0:2*rng:1./(self._rad*resolution)]
+            N.pi/2:rng:1./(resolution),
+            0:2*rng:1./(resolution)]
 
         x = self._rad * N.sin(theta) * N.cos(phi)
         y = self._rad * N.sin(theta) * N.sin(phi)
@@ -173,7 +177,7 @@ class CutSphereGM(SphericalGM):
         
         #in_bd = self._bound.in_bounds(coords) & (prm > 0)
         in_bd = N.array([self._bound.in_bounds(coords[...,c]) for c in xrange(prm.shape[1])]).T
-        in_bd &= prm > 0
+        in_bd &= prm > 1e-6
         select[~N.logical_or(*in_bd)] = N.nan
         one_hit = N.logical_xor(*in_bd)
         select[one_hit] = N.nonzero(in_bd[:,one_hit])[0]

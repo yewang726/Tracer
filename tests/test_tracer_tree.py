@@ -109,7 +109,7 @@ class TestRayCulling(unittest.TestCase):
         
         # 4 rays starting somewhat above (+z) the homogenizer
         pos = N.zeros((3,4))
-        pos[2] = 1.6
+        pos[2] = 1.5
 
         # One ray going to each wall, bearing down (-z):
         dir = N.c_[[1, 0, -1], [-1, 0, -1], [0, 1, -1], [0, -1, -1]]/N.sqrt(2)
@@ -154,5 +154,3 @@ class TestLowEnergyParenting(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-

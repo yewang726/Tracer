@@ -33,9 +33,9 @@ class HomogenizedLocalReceiver(Assembly):
             self._sides = (receiver_dims, receiver_dims)
         self._rec_pos = receiver_pos
         
-        self._rec, rec_obj = one_sided_receiver(*self._sides)
+        self._rec = one_sided_receiver(*self._sides)
         receiver_frame = N.dot(sp.translate(0, 0, receiver_pos), sp.rotx(N.pi))
-        rec_obj.set_transform(receiver_frame)
+        self._rec.set_transform(receiver_frame)
         
         self._hom = rect_homogenizer(self._sides[0], self._sides[1], \
             homogenizer_depth, homog_opt_eff)
@@ -43,7 +43,7 @@ class HomogenizedLocalReceiver(Assembly):
         
         self._mr = main_reflector
         refl = AssembledObject(surfs=[main_reflector])
-        Assembly.__init__(self, objects=[rec_obj, refl], subassemblies=[self._hom])
+        Assembly.__init__(self, objects=[self._rec, refl], subassemblies=[self._hom])
     
     def get_receiver_surf(self):
         """for anyone wishing to directly access the receiver"""
@@ -73,8 +73,8 @@ class HomogenizedLocalReceiver(Assembly):
         See Also:
         numpy.histogram2D()
         """
-        energy, pts = self._rec.get_optics_manager().get_all_hits()
-        x, y = self._rec.global_to_local(pts)[:2]
+        energy, pts = self._rec.get_surfaces()[0].get_optics_manager().get_all_hits()
+        x, y = self._rec.get_surfaces()[0].global_to_local(pts)[:2]
         rngx = self._sides[0]/2.
         rngy = self._sides[1]/2.
         

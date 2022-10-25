@@ -9,7 +9,7 @@ from tracer.ray_bundle import RayBundle
 from tracer.surface import Surface
 import tracer.optics_callables as opt
 
-class TestRectPlateGM(unittest.TestCase):
+class TestRoundPlateGM(unittest.TestCase):
     def test_value_error(self):
         """Can't create a negative round plate"""
         self.assertRaises(ValueError, RoundPlateGM, -1)
@@ -33,8 +33,5 @@ class TestRectPlateGM(unittest.TestCase):
         
         N.testing.assert_array_equal(z, 0) # Easy
         self.failIf(N.any(x**2 + y**2 > 25.001))
-
-if __name__ == '__main__':
-    unittest.main()
 
 
