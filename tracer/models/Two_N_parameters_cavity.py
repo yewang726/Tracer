@@ -585,4 +585,3 @@ class TwoNparamcav(Assembly):
 
 		print 'Final T guess:', self.T
 		return result_T_guess
-

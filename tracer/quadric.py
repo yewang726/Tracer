@@ -5,7 +5,7 @@
 # [2] http://en.wikipedia.org/wiki/Quadric
 
 import numpy as N
-from geometry_manager import GeometryManager
+from tracer.geometry_manager import GeometryManager
 
 class QuadricGM(GeometryManager):
     """
@@ -127,8 +127,7 @@ class QuadricGM(GeometryManager):
         Returns:
         The index of the selected intersection, or None if neither will do.
         """
-
-        is_positive = prm > 1e-6
+        is_positive = prm > 0.
         select = N.empty(prm.shape[1])
         select.fill(N.nan)
 

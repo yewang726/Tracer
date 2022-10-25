@@ -31,7 +31,6 @@ def surfaces_for_next_iteration(self, rays, surface_id):
 	return N.zeros((len(self.surfaces), rays.get_num_rays()), dtype=N.bool)
 
 def rect_one_sided_mirror(width, height, absorptivity=0, sigma=0., bi_var=True, option=None, location=None, rotation=None):
-
 	"""
 	construct an object with two surfaces: one on the XY plane, that is
 	specularly reflective, and one slightly below (negative z), that is opaque.
@@ -42,18 +41,15 @@ def rect_one_sided_mirror(width, height, absorptivity=0, sigma=0., bi_var=True, 
 	absorptivity - the ratio of energy incident on the reflective side that's
 		not reflected back.
 	"""
-
 	if option == 'fast':
 		surf = Surface(RectPlateGM(width, height),
 				   opt.OneSidedRealReflective(absorptivity, sigma, bi_var), location=location, rotation=rotation)
 	else:
 		surf = Surface(RectPlateGM(width, height),
 			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
-
 	obj = AssembledObject(surfs=[surf])
 
 	return obj
-
 
 
 def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sigma=0., bi_var=True, option=None, location=None, rotation=None):
@@ -65,13 +61,11 @@ def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sig
 		surf = Surface(RectangularParabolicDishGM(width, height, focal_length),
 			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 
-
-	#surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
+	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
 	obj = AssembledObject(surfs = [surf])
 	obj.surfaces_for_next_iteration = types.MethodType(
 		surfaces_for_next_iteration, obj, obj.__class__)
 	return obj
-
 
 def flat_quad_one_sided_mirror(width, height, quad_params, absorptivity=0., sigma=0., bi_var=True, option=None, location=None, rotation=None):
 
@@ -87,15 +81,11 @@ def flat_quad_one_sided_mirror(width, height, quad_params, absorptivity=0., sigm
 			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 
 	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
-
 	obj = AssembledObject(surfs = [surf])
-	obj.surfaces_for_next_iteration = types.MethodType(
-		surfaces_for_next_iteration, obj, obj.__class__)
+	obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj)#, obj.__class__)
 	return obj
 
-
 def one_sided_receiver(width, height, absorptivity=1, location=None, rotation=None):
-
 	"""
 	construct an object with two surfaces: one on the XY plane, that is
 	specularly reflective, and one slightly below (negative z), that is opaque.

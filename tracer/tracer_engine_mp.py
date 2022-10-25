@@ -10,13 +10,13 @@ class TracerEngineMP(TracerEngine):
 	'''
 	Famework for multi-processing using the tracer engine as is. 
 	Requires pathos: https://github.com/uqfoundation/pathos
+
 	Inheritance is broken by the multiprocessing pool and rebuilt on the tree and self._asm
 	The original assembly needs to be reallocated after the simulation to be able to get the values stored in the optical managers with previously defined objects.
+
 	Not the cleanest or finest implementation. Could be blended with the original engine and use the very same api. It works.
 	'''
-
-	def multi_ray_sim(self, sources, procs=8, minener=1e-10, reps=1000, tree=True):
-
+	def multi_ray_sim(self, sources, procs=1, minener=1e-10, reps=1000, tree=True):
 		self.minener = minener # minimum energy threshold
 		self.reps = reps # stop iteration after this many ray bundles were generated (i.e. 
 					# after the original rays intersected some surface this many times).
@@ -26,7 +26,7 @@ class TracerEngineMP(TracerEngine):
 			raise Exception('Number of sources and processors do not agree')
 
 		# Creates a pool of processes and makes them raytrace one different source each. The resm list returned is a list of copies of the original engine post raytrace.
-		timetrace = time.clock()
+		timetrace = time.time()
 		pool = Pool(processes=procs)
 		def trace(source):
 			self.ray_tracer(source, self.reps, self.minener, self.tree_switch)

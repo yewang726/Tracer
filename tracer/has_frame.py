@@ -1,7 +1,7 @@
 # Represents an object that is locatable in 3D space with 6 degrees of freedom.
 
 import numpy as N
-import pivy.coin as coin
+#import pivy.coin as coin
 
 class HasFrame(object):
     """
