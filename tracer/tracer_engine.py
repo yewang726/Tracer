@@ -44,7 +44,7 @@ class TracerEngine():
         """
         ret_shape = (len(surfaces), bundle.get_num_rays())
         stack = N.zeros(ret_shape)
-        owned_rays = N.empty(ret_shape, dtype=N.bool)
+        owned_rays = N.empty(ret_shape, dtype=bool)
         
         # Bounce rays off each object
         for surf_num in range(len(surfaces)):
@@ -121,7 +121,7 @@ class TracerEngine():
         surfs_until_obj = N.hstack((N.r_[0], N.add.accumulate(surfs_per_obj)))
         surf_ownership = N.repeat(N.arange(len(objects)), surfs_per_obj)
         ray_ownership = -1*N.ones(bund.get_num_rays())
-        surfs_relevancy = N.ones((num_surfs, bund.get_num_rays()), dtype=N.bool)
+        surfs_relevancy = N.ones((num_surfs, bund.get_num_rays()), dtype=bool)
 
         for i in range(reps):
             front_surf, owned_rays = self.intersect_ray(bund, surfaces, objects, \
@@ -166,7 +166,7 @@ class TracerEngine():
                 # Add new surface-relevancy information, saying which surfaces
                 # of the full list of surfaces must be checked next. This is
                 # somewhat memory-intensize and requires optimization.
-                surf_relev = N.ones((num_surfs, new_outg.get_num_rays()), dtype=N.bool)
+                surf_relev = N.ones((num_surfs, new_outg.get_num_rays()), dtype=bool)
                 surf_relev[surf_ownership == obj_idx] = \
                     objects[obj_idx].surfaces_for_next_iteration(new_outg, surf_rel_idx)
                 new_surfs_relevancy.append(surf_relev)
