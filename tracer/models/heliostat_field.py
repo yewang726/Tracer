@@ -93,7 +93,7 @@ class HeliostatField(Assembly):
 			
 			hstat_elev = N.arccos(norm_z)
 
-			for hidx in xrange(self._pos.shape[0]):
+			for hidx in range(self._pos.shape[0]):
 				if norm_x[hidx]>=0:
 					hstat_az = N.arccos(-norm_y[hidx]/N.sqrt(norm_x[hidx]**2+norm_y[hidx]**2))                                     
 				elif norm_x[hidx]<0:
