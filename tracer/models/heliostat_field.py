@@ -70,7 +70,7 @@ class HeliostatField(Assembly):
 		"""Change the verical position of the tower's target."""
 		self._th = h
 	
-	def aim_to_sun(self, azimuth, zenith, aim_points=None, tracking='azimuth_elevation', tracking_error=None, tracking_limits_primary_axis=None, tracking_limits_secondary_axis=None):
+	def aim_to_sun(self, aiming_pos, sun_vec, tracking='azimuth_elevation'):
 		"""
 		Aim the heliostats in a direction that brings the incident energy to
 		the tower.
@@ -81,41 +81,31 @@ class HeliostatField(Assembly):
 			in radians.
 		tracking - 'azimuth_elevation'; 'titl_roll': tracking actuation method. 
 		"""
-		sun_vec = solar_vector(azimuth, zenith)
-		#if aim_points == None:
-		aim_point = -self._pos 
-		aim_point[:,2] += self._th
-		aim_point /= N.sqrt(N.sum(aim_point**2, axis=1)[:,None])
-		hstat = sun_vec + aim_point
-		hstat /= N.sqrt(N.sum(hstat**2, axis=1)[:,None])
-
-
-		ang_err_1 = 0.
-		ang_err_2 = 0.
-
-		if tracking_limits_primary_axis == None:
-			tracking_limits_primary_axis = [-N.pi, N.pi]
-		if tracking_limits_secondary_axis == None:
-			tracking_limits_secondary_axis = [-N.pi, N.pi]
+		tower_vec = -self._pos+aiming_pos
+		tower_vec /= N.sqrt(N.sum(tower_vec**2, axis=1)[:,None])
+		hstat_norm=sun_vec+tower_vec
+		hstat_norm /= N.sqrt(N.sum(hstat_norm**2, axis=1)[:,None])
 
 		if tracking == 'azimuth_elevation':
-			hstat_az = N.arctan2(hstat[:,1], hstat[:,0])
-			hstat_el = N.arccos(hstat[:,2])
-			for hidx in range(self._pos.shape[0]):
-				if tracking_error != None:
-					ang_err_1 = N.random.normal(scale=tracking_error)
-					ang_err_2 = N.random.normal(scale=tracking_error)
-				ang_az = hstat_az[hidx]+ang_err_1-N.pi/2.
-				ang_el = -hstat_el[hidx]+ang_err_2
-				if ang_az<tracking_limits_primary_axis[0] or ang_az>tracking_limits_primary_axis[1]:
-					continue		
-				elif -ang_el<tracking_limits_secondary_axis[0] or -ang_el>tracking_limits_secondary_axis[1]:
-					continue
-				az_rot = rotz(ang_az)
-				elev_rot = rotx(ang_el)		
-				trans = N.dot(az_rot, elev_rot)
-				trans[:3,3] = self._pos[hidx]
+			norm_x=hstat_norm[:,0]
+			norm_y=hstat_norm[:,1]
+			norm_z=hstat_norm[:,2]
 			
+			hstat_elev = N.arccos(norm_z)
+
+			for hidx in xrange(self._pos.shape[0]):
+				if norm_x[hidx]>=0:
+					hstat_az = N.arccos(-norm_y[hidx]/N.sqrt(norm_x[hidx]**2+norm_y[hidx]**2))                                     
+				elif norm_x[hidx]<0:
+					hstat_az = N.arccos(norm_y[hidx]/N.sqrt(norm_x[hidx]**2+norm_y[hidx]**2)) +N.pi
+
+				elev_rot = rotx(hstat_elev[hidx])
+				az_rot = rotz(hstat_az)
+
+				trans = N.dot(az_rot,elev_rot)
+
+				trans[:3,3] = self._pos[hidx]
+
 				self._heliostats[hidx].set_transform(trans)
 
 		elif tracking == 'tilt_roll':
@@ -141,23 +131,19 @@ class HeliostatField(Assembly):
 
 def solar_vector(azimuth, zenith):
 	"""
-	Calculate the solar vector using zenith and azimuth.
-	
-	Arguments:
-	azimuth - the sun's azimuth, in radians, from North increasing towards to the East
-	zenith - angle created between the solar vector and the Z axis, 
-		in radians.
-	
-	Returns: a 3-component 1D array with the solar vector.
+    Calculate the solar vector using elevation and azimuth.
+
+    Arguments:
+    azimuth - the sun's azimuth, in radians, 
+	    from South increasing towards to the West
+    zenith - angle created between the solar vector and the Z axis, in radians.
+
+    Returns: a 3-component 1D array with the solar vector.
 	"""
-	azimuth = N.pi/2.-azimuth
-	if azimuth<0.: azimuth += 2*N.pi
-	sun_x = N.sin(zenith)*N.cos(azimuth)
-	sun_y = N.sin(zenith)*N.sin(azimuth)
 	sun_z = N.cos(zenith)
-
-	sun_vec = N.r_[sun_x, sun_y, sun_z] 
-
+	sun_y=-N.sin(zenith)*N.cos(azimuth)
+	sun_x=-N.sin(zenith)*N.sin(azimuth)
+	sun_vec = N.r_[sun_x, sun_y,sun_z] 
 	return sun_vec
 
 def radial_stagger(start_ang, end_ang, az_space, rmin, rmax, r_space):
