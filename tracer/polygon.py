@@ -28,21 +28,23 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 
 	def in_poly(self, points, profile):
 		# Trim obvious cases: 
-		# check local_coords gainst profile nodes
+		# check local_coords against profile nodes
+
 		x_pos = (points[0] <= profile[0,:,None]).T #(profile[0]-self._local[0])>=0.
 		y_pos = (points[1] <= profile[1,:,None]).T #(profile[1]-self._local[1])>=0.
+
 		# For segments fully beyond the point, just check the y coordinates of the segment: it is an intersection if y is in between the y coords of the segment.
 		beyond_x = N.logical_and(x_pos[:,:-1], x_pos[:,1:])
 		across_y = N.logical_xor(y_pos[:,:-1], y_pos[:,1:])
 		inters = N.logical_and(beyond_x, across_y)
 
-		# For segments with x on both sides of the point: find the intersection parameter and the positive params are valid
+		# For segments with x on both sides of the point: find where the intersection parameter and the positive params are valid
 		across_x = N.logical_xor(x_pos[:,:-1], x_pos[:,1:])
-		doubt = N.array(N.nonzero(N.logical_and(across_x, across_y)))
-
+		doubt = N.nonzero(N.logical_and(across_x, across_y))
 		# If there is a doubt for an intersection
-		for i in range(doubt.shape[1]):
-			inters[doubt[0,i],doubt[1,i]] = self.intersect(points[:2,doubt[0,i]], profile[:,doubt[1,i]:doubt[1,i]+2])
+		for i in range(len(doubt[0])):
+			inters[doubt[0][i],doubt[1][i]] = self.intersect(points[:2,doubt[0][i]], profile[:,doubt[1][i]:doubt[1][i]+2])
+
 		inside = N.array(N.sum(inters, axis=1)%2, dtype=bool)
 
 		return inside
@@ -51,8 +53,9 @@ class FlatSimplePolygonGM(FiniteFlatGM):
 		x0, y0 = segment[:,0]
 		x1, y1 = segment[:,1]
 		a = (y1-y0)/(x1-x0)
-		b = y0-a*x0
-		x_inter = (xy[1]-b)/a
+		#b = y0-a*x0
+		y0 -= a*x0
+		x_inter = (xy[1]-y0)/a
 		inter = x_inter>=xy[0]
 		return inter
 

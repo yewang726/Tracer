@@ -6,7 +6,7 @@
 
 from numpy import linalg as LA
 import numpy as N
-from geometry_manager import GeometryManager
+from tracer.geometry_manager import GeometryManager
 
 class FlatGeometryManager(GeometryManager):
 	"""
@@ -36,7 +36,7 @@ class FlatGeometryManager(GeometryManager):
 		
 		# Vet out parallel rays:
 		dt = N.dot(d.T, frame[:3,2])
-		unparallel = abs(dt) > 1e-9
+		unparallel = N.abs(dt) > 1e-7
 		
 		# `params` holds the parametric location of intersections along the ray 
 		params = N.empty(n)
@@ -47,11 +47,12 @@ class FlatGeometryManager(GeometryManager):
 		
 		# Takes into account a negative depth
 		# Note that only the 3rd row of params is relevant here!
-		negative = params < 1e-6
+		negative = params < 1e-7
 		params[negative] = N.inf
 		
 		self._params = params
 		self._backside = dt > 0.
+
 		return params
 		
 	def select_rays(self, idxs):
@@ -142,11 +143,11 @@ class FiniteFlatGM(FlatGeometryManager):
 		self._global = v + p[None,:]*d
 		N.seterr(**oldsettings)
 		# above we ignore invalid values. Those rays can't be selected anyway.
-
 		# Local should be deleted by children in their find_intersections.
+
 		self._local = N.dot(N.linalg.inv(self._working_frame),
 			N.vstack((self._global, N.ones(self._global.shape[1]))))
-		
+
 		return ray_prms
 	
 	def select_rays(self, idxs):
@@ -178,6 +179,8 @@ class RectPlateGM(FiniteFlatGM):
 		if height <= 0:
 			raise ValueError("Height must be positive")
 		
+		self.width = width
+		self.height = height
 		self._half_dims = N.c_[[width, height]]/2.
 
 		FiniteFlatGM.__init__(self)
@@ -351,7 +354,7 @@ class RoundPlateGM(FiniteFlatGM):
 			raise ValueError("Radius must be positive")
 		if Ri != None:
 			if Ri >= Re:
-				print 'Ri: ',Ri, 'Re: ', Re
+				print('Ri: ',Ri, 'Re: ', Re)
 				raise ValueError("Inner Radius must be lower than the outer one")
 			if Ri <= 0.:
 				raise ValueError("Radius must be positive")

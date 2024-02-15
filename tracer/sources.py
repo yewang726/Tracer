@@ -272,7 +272,7 @@ def buie_distribution(num_rays, CSR, pre_process_CSR=True):
 
 	# Discrete random ray directions generation according to Buie sunshape
 	# Step 1: integration over the whole Sunshape: 
-	nelem = 210.
+	nelem = 210
 
 	theta_int = N.linspace(0., theta_dni, nelem+1)
 	phi_dni_int = N.cos(0.326*theta_int*1e3)/N.cos(0.308*theta_int*1e3)#*N.sin(theta_int)
@@ -300,7 +300,7 @@ def buie_distribution(num_rays, CSR, pre_process_CSR=True):
 	# Step 3: polar angle determination: 
 	thetas = N.zeros(num_rays)
 	R_thetas = N.random.uniform(size=num_rays)
-	for i in xrange(len(CDF_DNI)-1):
+	for i in range(len(CDF_DNI)-1):
 		slice_loc = N.logical_and((R_thetas >= CDF_DNI[i]), (R_thetas < CDF_DNI[i+1]))
 		A = phi_dni_int[i]*N.cos(theta_int[i])*N.sin(theta_int[i])
 		B = phi_dni_int[i+1]*N.cos(theta_int[i+1])*N.sin(theta_int[i+1])
@@ -318,6 +318,32 @@ def buie_distribution(num_rays, CSR, pre_process_CSR=True):
 	sin_th = N.sin(N.hstack(thetas))
 	directions = N.vstack((N.cos(xi1)*sin_th, N.sin(xi1)*sin_th , N.cos(thetas)))
 
+	return directions
+
+def sunshape_to_ray_directions(angles, norm_intensity, num_rays):
+	num_rays = int(num_rays)
+	thetas = N.zeros(num_rays)
+	R_thetas = N.random.uniform(size=num_rays)
+	# Integration over full linear intervals:
+	integ_n_flux = 0.5*(norm_intensity[:-1]*N.cos(angles[:-1])*N.sin(angles[:-1])+norm_intensity[1:]*N.cos(angles[1:])*N.sin(angles[1:]))*(angles[1:]-angles[:-1])
+	# Numerical PDF and CDF
+	PDF = integ_n_flux/N.sum(integ_n_flux)
+	CDF = N.add.accumulate(N.hstack(([0.],PDF)))
+	# theta angles within the intervals:	
+	for i in range(len(CDF)-1):
+		slice_loc = N.logical_and((R_thetas >= CDF[i]), (R_thetas < CDF[i+1]))
+		A = norm_intensity[i]*N.cos(angles[i])*N.sin(angles[i])
+		B = norm_intensity[i+1]*N.cos(angles[i+1])*N.sin(angles[i+1])
+		if A==B:
+			thetas[slice_loc] = angles[i]+N.sum(integ_n_flux)*(R_thetas[slice_loc]-CDF[i])/A
+		else:
+			C = 2.*N.sum(integ_n_flux)*(R_thetas[slice_loc]-CDF[i])*(angles[i+1]-angles[i])
+			R = -(-A*angles[i+1]+B*angles[i]+N.sqrt(((angles[i]-angles[i+1])*A)**2.+C*(B-A)))/(A-B)
+			thetas[slice_loc] = R
+
+	phis = N.random.uniform(high=2.*N.pi, size=num_rays)
+	sin_th = N.sin(N.hstack(thetas))
+	directions = N.vstack((N.cos(phis)*sin_th, N.sin(phis)*sin_th , N.cos(thetas)))
 	return directions
 
 def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_process_CSR=True, rays_direction=None):
@@ -400,7 +426,7 @@ def rect_buie_sunshape(num_rays, center, direction, width, height, CSR, flux=Non
 	S = width*height
 
 	# Rays escaping direction setup:
-	if rays_direction == None:
+	if rays_direction is None:
 		rays_direction = direction
 
 	# Uniform ray energy:
@@ -600,7 +626,7 @@ def vf_frustum_bundle(num_rays, r0, r1, depth, center, direction, flux=None , ra
 	theta_rot = -N.pi/2.+theta_s
 	yrot = roty(theta_rot)[:3,:3]
 	local_unit = N.zeros((N.shape(dir_flat)))
-	for t in xrange(N.shape(dir_flat)[1]):
+	for t in range(N.shape(dir_flat)[1]):
 		rotd = N.dot(yrot, dir_flat[:,t])
 		zrot = rotz(phi_s[t])[:3,:3]
 		local_unit[:,t] = N.dot(zrot, rotd)

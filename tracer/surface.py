@@ -6,7 +6,7 @@
 # [1] John J. Craig, Introduction to Robotics, 3rd ed., 2005. 
 
 import numpy as N
-from has_frame import HasFrame
+from tracer.has_frame import HasFrame
 
 
 class Surface(HasFrame):
@@ -188,7 +188,7 @@ class Surface(HasFrame):
 				fluxmap = False
 
 		meshes = self._geom.get_scene_graph(resolution)
-		for m in xrange(len(meshes)/3):
+		for m in range(int(len(meshes)/3)):
 			n = coin.SoSeparator()
 
 			X,Y,Z = meshes[3*m:3*m+3]
@@ -227,6 +227,7 @@ class Surface(HasFrame):
 				n0.addChild(mymatbind)
 			
 			n0.addChild(n)
+			
 			
 		return n0
 

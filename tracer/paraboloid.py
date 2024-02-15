@@ -5,7 +5,8 @@
 # [2] http://en.wikipedia.org/wiki/Parabola
 
 import numpy as N
-from quadric import QuadricGM
+from .quadric import QuadricGM
+from .spatial_geometry import rotx, roty, rotz
 
 class Paraboloid(QuadricGM):
 	"""Implements the geometry of a circular paraboloid surface"""
@@ -147,6 +148,7 @@ class ParabolicDishGM(Paraboloid):
 		y = N.outer(rs, N.sin(angs))
 		z = self.a*x**2 + self.b*y**2
 		return x, y, z
+
 		
 	def get_fluxmap(self, eners, local_coords, resolution):
 		'''
@@ -228,13 +230,31 @@ class RectangularParabolicDishGM(Paraboloid):
 	the dish has a rectangular aperture. The parameters for the paraboloid's
 	equations are determined from the focal length. The sides of the rectangle
 	are oriented parallel to the X, Y axes.
+	If there is an off axis normal given, the "focal length" is adjusted to place the surface
+	at a distance of the focus equal to the focal_length argument given instead of using it directly for the paraboloid focal_length.
 	"""
-	def __init__(self, width, height, focal_length):
-		par_param = 2*N.sqrt(focal_length)
-		Paraboloid.__init__(self, par_param, par_param)
-		self._half_dims = N.c_[[width, height]]/2
-		self._w, self._h = width/2., height/2.
+	def __init__(self, width, height, focal_length, off_axis_normal=None):
+		self._off_axis_normal = off_axis_normal
+		if self._off_axis_normal is not None:
+			d = focal_length
+			theta_n = N.arccos(off_axis_normal[2])
+			theta_r = 2.*theta_n
+			r = d*N.sin(theta_r)
+			zc = d*(1.-N.cos(theta_r))/2. # cone and parabola intersection.
+			focal_length = d*N.cos(theta_r)+zc
 
+			phi = N.arctan2(off_axis_normal[1], off_axis_normal[0]) # phi angle between the pont pof the parabola and the center.
+			xc, yc = -r*N.cos(phi), -r*N.sin(phi)
+			self._rect_center = -N.array([xc, yc, zc])
+			rect_rot = N.dot(roty(-theta_n), rotz(-phi))[:3,:3]
+			self._rect_rot = N.dot(rotz(phi)[:3,:3], rect_rot) # rotation that positions the off_normal as z in the frame of reference of the paraboloidal surface.
+
+
+		self._w, self._h = width/2., height/2.
+		self._half_dims = N.c_[[width, height]]/2
+
+		par_param = 2.*N.sqrt(focal_length)
+		Paraboloid.__init__(self, par_param, par_param)
 
 	def _select_coords(self, coords, prm):
 		"""
@@ -244,7 +264,7 @@ class RectangularParabolicDishGM(Paraboloid):
 		
 		Arguments:
 		coords - a 2 by 3 by n array whose each column is the global coordinates
-			of one intersection point of a ray with the sphere.
+			of one intersection point of a ray with the parabola.
 		prm - the corresponding parametric location on the ray where the
 			intersection occurs.
 
@@ -252,14 +272,19 @@ class RectangularParabolicDishGM(Paraboloid):
 		The index of the selected intersection, or None if neither will do.
 		"""
 		select = QuadricGM._select_coords(self, coords, prm)
-
 		coords = N.concatenate((coords, N.ones((2,1,coords.shape[2]))), axis = 1)
+
 		# assumed no additional parameters to coords, axis = 1
-		local = N.sum(N.linalg.inv(self._working_frame)[None,:2,:,None] * \
+		local = N.sum(N.linalg.inv(self._working_frame)[None,:3,:,None] * \
 			coords[:,None,:,:], axis=2)
+
+		if self._off_axis_normal is not None:
+			local[0] = N.dot(self._rect_rot, local[0]+N.vstack(self._rect_center)) 
+			local[1] = N.dot(self._rect_rot, local[1]+N.vstack(self._rect_center)) 
 
 		abs_x = abs(local[:,0,:])
 		abs_y = abs(local[:,1,:])
+
 		outside = abs_x > self._w
 		outside |= abs_y > self._h
 		inside = (~outside) & (prm > 1e-6)
@@ -286,12 +311,21 @@ class RectangularParabolicDishGM(Paraboloid):
 			resolution = 40
 		points = N.ceil(resolution*self._half_dims.reshape(-1)*2)
 		points[points < 2] = 2 # At least the edges of the range.
-		xs = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], points[0])
-		ys = N.linspace(-self._half_dims[1,0], self._half_dims[1,0], points[1])
-		
+		xs = N.linspace(-self._half_dims[0,0], self._half_dims[0,0], int(points[0]))
+		ys = N.linspace(-self._half_dims[1,0], self._half_dims[1,0], int(points[1]))
+
 		x, y = N.broadcast_arrays(xs[:,None], ys)
+
+		if self._off_axis_normal is not None:
+			shape = x.shape
+			locs = N.array([N.hstack(x), N.hstack(y)])
+			locs = N.dot(self._rect_rot[:2,:2], locs)
+			x = N.reshape(locs[0], shape)-self._rect_center[0]
+			y = N.reshape(locs[1], shape)-self._rect_center[1]
+	
 		z = self.a*x**2 + self.b*y**2
 		#print(">>> heliostat", x, y, z)
+		
 		return x, y, z
 	
 

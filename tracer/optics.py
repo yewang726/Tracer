@@ -6,6 +6,7 @@
 # [3] Warren J. Smith, Modern Optical Engineering, 4th Ed., 2008; p. 208.
 
 import numpy as N
+from electromagnetics import fresnel_to_attenuating
 
 def fresnel(ray_dirs, normals, n1, n2):
 	"""Determines what ratio of the ray bundle is reflected and what is refracted, 
@@ -35,6 +36,87 @@ def fresnel(ray_dirs, normals, n1, n2):
 	# R = ratio of reflected energy, T = ratio refracted (transmittance)
 	R = (Rs + Rp)/2
 	return R
+
+def fresnel_conductor(ray_dirs, normals, lambdas, material, n1=1., m2=None):
+	'''
+	Fresnel reflections from a perfect dielectric to an attenuator (conductor). 
+	Arguments: 
+	ray_dirs - the directions of the ray bundle
+	normals - a 3 by n array where for each of the n rays in ray_dirs, the 
+		normal to the surface at the ray/surface intersection is given.
+	lambdas - The wavelengths of the rays in the bundle
+	material - an optical material instance (see the optical constants module)
+	n1 - refraction index of the material the ray is leaving
+	m2 - a forced complex refractive index
+	
+	Returns:  
+	R_p, R_s - the parallel and perpendicular reflectances
+	theta2 - the refraction angle in the material
+	'''
+	if m2 is None:
+		m2 = material.m(lambdas)
+	theta_in = N.arccos(N.abs((normals*ray_dirs).sum(axis=0)))
+	R_p, R_s, theta2 = fresnel_to_attenuating(n1, m2, theta_in)
+	return R_p, R_s, theta2
+
+def polarised_reflections(ray_dirs, normals, R_p, R_s, E_p, E_s):
+	'''
+	not verified yet
+	'''
+
+	s_i = ray_dirs
+	s_r = reflections(ray_dirs, normals) # reflection directions
+
+	z = N.vstack([0.,0.,1.])
+
+	c_i = N.cross(z.T, s_i.T).T
+	h_i = c_i/N.linalg.norm(c_i,axis=0)
+	c_r = N.cross(z.T, s_r.T).T
+	h_r = c_r/N.linalg.norm(c_r,axis=0)
+
+	v_i = N.cross(h_i.T, s_i.T).T
+	v_r = N.cross(h_r.T, s_r.T).T
+
+	hrsi = N.matmul(h_r, s_i)
+	hisr = N.matmul(h_i, s_r)
+	vrsi = N.matmul(v_r, s_i)
+	visr = N.matmul(v_i, s_r)
+	sisr4 = N.linalg.norm(N.cross(si.T, sr.T).T, axis=0)**4
+
+	rho_ss = N.linalg.norm(vrsi*visr*R_s + hrsi*hisr*R_p, axis=0)**2/sisr4
+	rho_ps = N.linalg.norm(hrsi*visr*R_s - vrsi*hisr*R_p, axis=0)**2/sisr4
+	rho_sp = N.linalg.norm(vrsi*hisr*R_s - hrsi*vsr*R_p, axis=0)**2/sisr4
+	rho_pp = N.linalg.norm(hrsi*hisr*R_s + vrsi*visr*R_p, axis=0)**2/sisr4
+
+	in_pol = N.vstack([E_s, E_p])
+	pol_mat = N.array([[rhoss, rho_ps],[rho_sp, rho_pp]])
+	E_r_s, E_r_p = N.dot(pol_mat, in_pol)
+	return E_r_p, E_r_s, s_r
+
+def apparent_NK(m, alpha):
+	'''
+	https://www-sciencedirect-com.virtual.anu.edu.au/science/article/pii/S002240730500066X
+	'''
+	n2_k2 = m.real**2-m.imag**2
+	N = N.sqrt(0.5*(n2_k2+N.sqrt(n2_k2**2+4.*(m.real*m.imag/N.cos(alpha))**2)))
+	K = N.sqrt(N**2-n2_k2)
+	return N, K
+
+def generalised_fresnel(ray_dirs, normals, lambdas, material1, material2):
+	'''
+	https://www-sciencedirect-com.virtual.anu.edu.au/science/article/pii/S002240730500066X
+	INCOMPLETE
+	'''
+	print("WIP")
+	stop
+	m1, m2 = material1.m(lambdas), material2.m(lambdas)
+	N1, K1 = apparent_NK(m1, alpha1)
+	N2, K2 = apparent_NK(m2, alpha2)
+
+	theta_in = N.arccos(N.abs((normals*ray_dirs).sum(axis=0)))
+	R_p, R_s, theta2 = Generalised_Fresnel(m, m2, theta1)
+	return R_p, R_s, theta2
+	
 			   
 def reflections(ray_dirs, normals):  
 	"""
@@ -47,7 +129,6 @@ def reflections(ray_dirs, normals):
 	
 	Returns: new ray directions as the result of reflection, 3 by n array.
 	"""
-
 	vertical = N.sum(ray_dirs*normals, axis=0)*normals # normal dot ray, really
 	return ray_dirs - 2.*vertical
 
@@ -97,11 +178,42 @@ def refr_idx_hartmann(wavelength, a, b, c, d, e):
 	"""
 	return a + b/(c - wavelength) 
 
-def attenuations(path_lengths, attenuation_coefficient, energy):
+def attenuations(path_lengths, k, lambda_0, energy):
 	'''
-	Calculates energy attenuation from a Lambert's Law.
+	Calculates energy attenuation from the wavelength in vacuum (lambda 0), the absorption index (complex part of the complex refractive index, k) and the path length.
+	
 	'''
-	T = N.exp(-attenuation_coefficient*path_lengths)
+	T = N.exp(-4.*N.pi*k/lambda_0*path_lengths)
 	energy = T*energy
 	
 	return energy
+
+if __name__ == '__main__':
+	import matplotlib.pyplot as plt
+	from sys import path
+
+	# test fresnel with Modest's 3 ed. Figure 2-11
+	lambdas= [3.1e-6]
+	n1 = 1.
+	m2 = 4.46 +1j*31.5
+
+	thetas = N.linspace(0.,90.,150)
+	ray_dirs = N.zeros((3, 150))
+	ray_dirs[0] = -N.sin(thetas*N.pi/180.)
+	ray_dirs[2] = -N.cos(thetas*N.pi/180.)
+
+	normals = N.zeros((3, 150))
+	normals[2] = 1.
+
+	R_p, R_s, theta_2 = fresnel_conductor(ray_dirs, normals, lambdas, material='no', n1=n1, m2=m2)
+	#polarised_reflections_conductor(ray_dirs, normals, R_s, R_p, E_s, E_p)
+
+	plt.figure()
+	plt.plot(thetas, R_p, color='b', label=r'$\rho_\parallel$')
+	plt.plot(thetas, R_s, color='r', label=r'$\rho_\bot$')
+	plt.plot(thetas, (R_p+R_s)/2., color='violet', label=r'$\overline{\rho}$')
+	plt.xlabel(r'${\theta}$ (${^\circ}$)')
+	plt.ylabel(r'$\rho$')
+	plt.legend()
+	
+	plt.savefig(path[0]+'/test_polarised_fresnel_Al.png')

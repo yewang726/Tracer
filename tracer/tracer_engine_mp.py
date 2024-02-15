@@ -28,8 +28,9 @@ class TracerEngineMP(TracerEngine):
 		# Creates a pool of processes and makes them raytrace one different source each. The resm list returned is a list of copies of the original engine post raytrace.
 		timetrace = time.clock()
 		pool = Pool(processes=procs)
+
 		def trace(source):
-			self.ray_tracer(source, self.reps, self.minener, self.tree_switch)
+			self.ray_tracer(source, self.reps, self.minener, self.tree_switch, accel=False, Kd_Tree=None)
 			return self
 		resm = pool.map(trace, sources)
 

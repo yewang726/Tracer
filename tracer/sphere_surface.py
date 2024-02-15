@@ -4,7 +4,7 @@
 # [1] http://www.siggraph.org/education/materials/HyperGraph/raytrace/rtinter1.htm
 
 import numpy as N
-from quadric import QuadricGM
+from .quadric import QuadricGM
 import pivy.coin as coin
 
 class SphericalGM(QuadricGM):
@@ -200,7 +200,7 @@ class SphericalRectFacet(SphericalGM):
 		coords = N.concatenate((coords, N.ones((2,1,coords.shape[2]))), axis=1)
 		local = N.sum(N.linalg.inv(self._working_frame)[None,:,:,None] * coords[:,None,:,:], axis=2)
 
-		bottom_hem = (local[:,2,:] <= 0) & (prm > 0)
+		bottom_hem = (local[:,2,:] <= 0) & (prm > 1e-6)
 		in_facet = (N.abs(local[:,0,:])<=self.lx/2.) & (N.abs(local[:,1,:])<=self.ly/2.)
 		good = N.logical_and(bottom_hem,in_facet)
 		select[~N.logical_or(*good)] = N.nan
@@ -225,10 +225,15 @@ class SphericalRectFacet(SphericalGM):
 
 		if resolution is None:
 			resolution = 40.
-		x = N.r_[-self.lx/2.: self.lx/2.+self.lx/resolution: self.lx/resolution]
-		y = N.r_[-self.ly/2.: self.ly/2.+self.ly/resolution: self.ly/resolution]
-		z = N.sqrt(self._rad**2.-x**2.-y**2.)
-		print x
+		if resolution<2:
+			resolution = 2
+		#x = N.r_[-self.lx/2.: self.lx/2.+self.lx/resolution: self.lx/resolution]
+		#y = N.r_[-self.ly/2.: self.ly/2.+self.ly/resolution: self.ly/resolution]
+		xs = N.linspace(-self.lx/2, self.lx/2, resolution)
+		ys = N.linspace(-self.ly/2, self.ly/2, resolution)
+		x, y = N.broadcast_arrays(xs[:,None], ys)
+
+		z = -N.sqrt(self._rad**2.-x**2.-y**2.)
 
 		return x, y, z
 

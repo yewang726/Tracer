@@ -33,9 +33,7 @@ class HasFrame(object):
         self.set_location(location)
         self.set_rotation(rotation)
         self._temp_frame = self._transform
-        
-        # TODO for compatibility with Coin3D we might need to store these rotations
-        # internally as quaternions... hmmm...???
+
 
     def get_location(self):
         return self._loc

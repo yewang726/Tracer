@@ -61,7 +61,7 @@ def rect_para_one_sided_mirror(width, height, focal_length, absorptivity=0., sig
 		surf = Surface(RectangularParabolicDishGM(width, height, focal_length),
 			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 
-	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
+	#surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
 	obj = AssembledObject(surfs = [surf])
 	obj.surfaces_for_next_iteration = types.MethodType(
 		surfaces_for_next_iteration, obj, obj.__class__)
@@ -80,7 +80,7 @@ def flat_quad_one_sided_mirror(width, height, quad_params, absorptivity=0., sigm
 		surf = Surface(RectFlatQuadricSurfaceGM(width, height, a, b, c, d, e, f),
 			opt.OneSidedRealReflectiveDetector(absorptivity, sigma, bi_var), 							location=location, rotation=rotation)
 
-	surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
+	#surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
 	obj = AssembledObject(surfs = [surf])
 	obj.surfaces_for_next_iteration = types.MethodType(
 		surfaces_for_next_iteration, obj, obj.__class__)
