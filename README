@@ -19,17 +19,19 @@ Tracer is written in Python, using NumPy and SciPy for the math side of things.
 Status
 ------
 The code is advanced enough to produce research. It is currently a programming
-library. NO GUI yet.
+library. NO GUI.
 
 Current capablilities:
 - Flat, parabolic, spherical and conical surfaces
-- Specular and diffuse reflections with surface slope error
+- A large range of optical managers, from specular monochromatic to spectral bi-directional reflection functions. Supports refractive optics and attenuation.
+- Modular optical managers able to store all important data while simulating, thus simplifying significantly data-posr-processing.
 - A bunch of results analysis tools
 - Pillbox and Buie sunshape implementations
 - Radiosity sytem solver for thermal emissions
-- Basic parallel processing
+- Basic parallel processing with Pathos (although not needed anymore for single machine uses)
+- Kd-Tree binary partition scheme for 3D acceleration.
 
-There are no provisions for spectral response or polarization yet, but the 
+There are no provisions for polarization yet, but the 
 package is designed to make it easy to add them, and also to remove unnecessary
 features and plug in speed-improving optical and geometrical models that
 utilize problem-specific features.
