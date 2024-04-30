@@ -12,7 +12,7 @@ class QuadricGM(GeometryManager):
     A base class for quadric surfaces, to be derived for creation of specific
     quadric geometries. Each subclass should define the following methods:
     
-    get_ABC(ray_bundle) - Given a RAyBundle instance, return A, B, C, the
+    get_ABC(ray_bundle) - Given a RayBundle instance, return A, B, C, the
         coefficients of a quadratic equation of t, the parametric position
         on each ray where it hits the surface (each of A, B, C is as long as
         the number of rays in ray_bundle).
@@ -28,7 +28,7 @@ class QuadricGM(GeometryManager):
     
     Additionally, overriding _select_coords(self, coords, prm) may be required.
     """
-    
+
     def find_intersections(self, frame, ray_bundle):
         """
         Register the working frame and ray bundle, calculate intersections

@@ -11,6 +11,7 @@ from numpy import random, linalg as LA
 import numpy as N
 from tracer.ray_bundle import RayBundle, concatenate_rays
 from tracer.spatial_geometry import *
+from ray_trace_utils.vector_manipulations import rotate_z_to_normals
 
 def single_ray_source(position, direction, flux=None):
 	'''
@@ -32,9 +33,18 @@ def single_ray_source(position, direction, flux=None):
 	singray.set_energy(flux*N.ones(1))
 	return singray
 
+def isotropic_directions_sampling(num_rays, ang_range, normals=None):
+	# Diffuse divergence from +Z:
+	# development based on eq. 2.12  from [1]
+	xi1 = random.uniform(high=2.*N.pi, size=num_rays) # Phi
+	xi2 = random.uniform(size=num_rays) # Rtheta
+	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
+	dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
+	dirs = rotate_z_to_normals(dirs, normals)
+	return dirs
+
 def pillbox_sunshape_directions(num_rays, ang_range):
-	"""
-	Calculates directions for a ray bundles with ``num_rays`` rays, distributed
+	"""	Calculates directions for a ray bundles with ``num_rays`` rays, distributed
 	as a pillbox sunshape shining toward the +Z axis, and deviating from it by
 	at most ang_range, such that if all rays have the same energy, the flux
 	distribution comes out right.
@@ -47,19 +57,7 @@ def pillbox_sunshape_directions(num_rays, ang_range):
 	A (3, num_rays) array whose each column is a unit direction vector for one
 		ray, distributed to match a pillbox sunshape.
 	"""
-	# Diffuse divergence from +Z:
-	# development based on eq. 2.12  from [1]
-	xi1 = random.uniform(high=2.*N.pi, size=num_rays) # Phi
-	xi2 = random.uniform(size=num_rays) # Rtheta
-	#theta = N.arcsin(N.sin(ang_range)*N.sqrt(xi2))
-	#sin_th = N.sin(theta)
-	#a = N.vstack((N.cos(xi1)*sin_th, N.sin(xi1)*sin_th , N.cos(theta)))
-
-	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)	 
-
-	a = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
-
-	return a
+	return isotropic_directions_sampling(num_rays, ang_range)
 
 def bivariate_directions(num_rays, ang_range_hor, ang_range_vert):
 	"""
@@ -708,4 +706,30 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 
 	return rayb
 
+def planck(wl, T):
+	h = 6.626070040e-34 # Planck constant
+	c = 299792458. # Speed of light in vacuum
+	k = 1.38064852e-23 # Boltzmann constant
+	return (2.*N.pi*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
 
+def emission_source_axisymmetrical(positions, thetas, emittance, T, nrays, wl_range=None):
+	# Build axisymmetrical emissions profile
+	# Integrate the emmittance
+	if wl_range is not None:
+		wls = N.linspace(wl_range[0], wl_range, 1000)
+		luminance = planck(wls, T)
+		bb_luminance_total = N.trapz(luminance, wls)
+	else:
+		bb_luminance_total = 5.67e-8/N.pi*T**4
+	emissions = emittance*bb_luminance_total*N.cos(thetas)
+	# Sample the emisisons profile distribution to get directions and energy
+	thetas_rays, weights = PW_lincos_distribution(thetas, emissions).sample(ns)
+	phis_rays = N.random.uniform(ns)*2.*N.pi
+	directions = N.vstack([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
+	# rotate to make z the normals
+	for i,d in enumerate(directions):
+		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
+	
+	energy = weigths
+	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
+	return rayb

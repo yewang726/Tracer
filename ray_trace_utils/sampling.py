@@ -4,8 +4,8 @@ from scipy.interpolate import RegularGridInterpolator
 class PW_linear_distribution(object):
 
 	def __init__(self, xs, ys):
-		self.xs = xs
-		self.ys = ys
+		self.xs = N.round(xs, decimals=8)
+		self.ys = N.round(ys, decimals=8)
 		self.a = (self.ys[1:] - self.ys[:-1])/(self.xs[1:] - self.xs[:-1])
 		self.b = self.ys[:-1]-self.a*self.xs[:-1]
 		self.integ = (xs[1:]-xs[:-1])*(ys[1:]+ys[:-1])/2.
@@ -95,7 +95,6 @@ class PW_bilinear_distribution(object):
 				p_ygx = self.PDF(x_samples[loc], y_samples[loc])/self.dist_x.PDF(x_samples[loc])
 				# Importance sampling
 				weights[loc] = p_ygx*weights_y_s
-		print (N.sum(weights)/ns)
 		return x_samples, y_samples, weights
 		
 class PW_lincos_distribution(object):
@@ -133,13 +132,14 @@ class PW_lincos_distribution(object):
 	def sample(self, ns):
 		return pw_linear_importance_sampling(self, ns)
 
-class BDRF_distribution(object):
+class BDRF_distribution_noinc(object):
 	def __init__(self, th_u, phi_u, bdrf):
 		'''
-		Works with regular distributions, ie. there is a grid formed by xu and phi_u and we anly give the axis coordinates of the grid. 
-		xu, phi_u - Unique values of the grid coordinates
-		zs - (len(xy), len(phi_u)) array of zs values.
-		This implementation returns samples that include the cosine factor: the resulting weighst are applied directly to the energy of the incident rays
+		Works with any piecewise linear distribution, ie. there is a grid formed by th_u and phi_u and we only give the axis coordinates of the grid. 
+		th_, phi_u - Unique values of the grid coordinates
+		bdrf - (len(th_u), len(phi_u)) array of bdrf values.
+		This implementation returns samples that include the cosine factor: the resulting weights are applied directly to the energy of the incident rays.
+		This _noinc does not give any indication about the incident angle
 		'''
 		self.th_u = th_u
 		self.phi_u = phi_u
@@ -179,6 +179,63 @@ class BDRF_distribution(object):
 				weights[loc] = p_phigth*weights_phi_s
 		return th_samples, phi_samples, weights
 		
+class BDRF_distribution(object):
+	# make a more afficient class that can deal with having an interpolator as an input.
+	def __init__(self, interpolator):
+		'''
+		Works with any piecewise linear distribution.
+		Input: interpolator able to return the piecewise linear interpolation of teh BDRF. the interpolator contains all the information needed about the definition grid.
+		This implementation returns samples that include the cosine factor: the resulting weights are applied directly to the energy of the incident rays.
+		'''
+		self.th_u, self.phi_u = interpolator.grid[2:]
+		self.interpolator = interpolator
+		
+	def integrate(self, th_i, phi_i):
+		# Calculate f_x, the distribution along x, integrating over y.
+		f_th = N.zeros(len(self.th_u))
+		for i, th in enumerate(self.th_u):
+			f_th[i] = PW_linear_distribution(self.phi_u, self(th_i, phi_i, th, self.phi_u)).tot_integ
+		self.dist_th = PW_lincos_distribution(self.th_u, f_th/N.cos(self.th_u)) # we have to remove the cosine factor as it is added in the lincos distribution
+		self.tot_integ = self.dist_th.tot_integ
+		
+	def theoretical_histogram(self, th_i, phi_i):
+		hist = N.zeros((len(self.th_u)-1,len(self.phi_u)-1))
+		f_th = N.zeros((len(self.th_u), len(self.phi_u)-1))
+		for i, th in enumerate(self.th_u):
+			f_th[i] = PW_linear_distribution(self.phi_u, self(th_i, phi_i, th, self.phi_u)).integ
+		for j, phi in enumerate(self.phi_u[:-1]):
+			hist[:,j] = PW_lincos_distribution(self.th_u, f_th[:,j]/N.cos(self.th_u)).integ
+		return N.cos(th_i)*hist
+		
+	def DHR(self, th_i, phi_i):
+		return N.sum(self.theoretical_histogram(th_i, phi_i))
+		
+	def __call__(self, th_i, phi_i, th, phi):
+		return self.interpolator((th_i, phi_i, th, phi))*N.cos(th)
+		
+	def PDF(self, th_i, phi_i, th, phi):
+		return self(th_i, phi_i, th, phi)/self.tot_integ
+		
+	def sample(self, th_i, phi_i, ns):
+		self.integrate(th_i, phi_i)
+		# Sample dist_th
+		th_samples, weights_th = self.dist_th.sample(ns)
+		# With samples found for x, compute the the PDF for y given the x-sampled values and sample y.
+		# It is faster here to use importance sampling over the th_u values intervals. Thsi way we use a common sampling function for all of them and only need weighting
+		phi_samples = N.zeros(ns)
+		weights = N.zeros(ns)
+		for i in range(len(self.th_u)-1):
+			loc = N.logical_and(th_samples>=self.th_u[i], th_samples<self.th_u[i+1])
+			if loc.any():
+				th_mid = N.average(th_samples[loc])
+				# Sampling distribution
+				dist_phi_s = PW_linear_distribution(self.phi_u, self(th_i, phi_i, th_mid*N.ones(len(self.phi_u)), self.phi_u) )
+				phi_samples[loc], weights_phi_s = dist_phi_s.sample(N.sum(loc))
+				# Conditional PDF
+				p_phigth = self.PDF(th_i, phi_i, th_samples[loc], phi_samples[loc])/self.dist_th.PDF(th_samples[loc])# This is because these weights form the ps distribution are perfect inverse of the PDF
+				# Importance sampling
+				weights[loc] = p_phigth*weights_phi_s
+		return th_samples, phi_samples, weights
 
 def pw_linear_importance_sampling(dist, ns):
 	'''
@@ -188,9 +245,36 @@ def pw_linear_importance_sampling(dist, ns):
 	sampling_dist = PW_linear_distribution(dist.xs, dist(dist.xs))
 	x_s, weights_s = sampling_dist.sample(ns)
 	weights = weights_s*dist.PDF(x_s)
-	#weights /= (N.sum(weights/float(ns)))
+	weights /= (N.sum(weights/float(ns))) # takes care of rounding errors
 	return x_s, weights
 	
+def disk_sampling(r_ext, ns, normal_up=True):
+	ths = N.random.uniform(size=ns)*2.*N.pi
+	rs = N.sqrt(N.random.uniform(ns)*r_ext**2.)
+	positions = N.vstack([rs*N.cos(ths), rs*N.sin(ths), N.zeros(ns)])
+	normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
+	if normal_up == False:
+		normals = -normals
+	return positions, normals
+	
+def cylinder_sampling(r_ext, h, ns, normal_in=True):
+	ths = N.random.uniform(size=ns)*2.*N.pi
+	zs = N.random.uniform(size=ns)*h
+	positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])
+	normals = -N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
+	if normal_in == False:
+		normals = -normals
+	return positions, normals
+	
+def sphere_sampling(r_ext, ns, normal_in=True):
+	phis = N.random.uniform(size=ns)*2.*N.pi
+	cosths = N.random.uniform(low=-1., high=1., size=ns) # cosine of polar angle uniformly distributed
+	sinths = N.sqrt(1.-cosths**2)
+	normals = N.vstack([sinths*N.cos(phis), sinths*N.sin(phis), cosths])
+	positions = r_ext*normals
+	if normal_in == True:
+		normals = -normals
+	return positions, normals
 	
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
@@ -199,8 +283,9 @@ if __name__ == '__main__':
 	import cProfile
 	
 	test_cos = 0
-	test_importance_sampling = 1
-	test_sample = 1
+	test_importance_sampling = 0
+	test_sample = 0
+	test_sampling_full_BDRF = 1
 
 	if test_cos:
 		ths = N.linspace(0, N.pi/2., 100)
@@ -344,3 +429,60 @@ if __name__ == '__main__':
 		plt.colorbar(label='Relative error (%)')
 
 		plt.savefig(path[0]+'/test_BDRF.png')
+		
+	if test_sampling_full_BDRF:
+		from BDRF_models import regular_grid_Cook_Torrance
+		from BDRF_analysis import bdrf_to_dhr
+		m, R_Lam, alpha = 1.1, 0.5, 0.2
+		ns = int(1e6)
+		ares_rad = 5.*N.pi/180.
+		# build BDRFs for the relevant wavelengths and incident angles
+		npoints = int(N.ceil(N.pi/2./ares_rad))
+		thetas_r, phis_r = N.linspace(0., N.pi/2., npoints), N.linspace(0., 2.*N.pi, npoints)
+		thetas_i, phis_i = thetas_r, phis_r
+		#if axisymmetric_i: # if the bdrf is axisymmetric in incidence angle, no need to do all the phi incident
+		phis_i = phis_i[[0]]
+		bdrfs = N.zeros((len(thetas_i), len(phis_i), len(thetas_r), len(phis_r)))
+		dhr = N.zeros((len(thetas_i), len(phis_i)))
+		for i, thi in enumerate(thetas_i):
+			for j, phi in enumerate(phis_i):
+				CT = regular_grid_Cook_Torrance(thetas_r_rad=thetas_r, phis_r_rad=phis_r, th_i_rad=thi, phi_i_rad=phi, m=m, R_dh_Lam=R_Lam, alpha=alpha)
+				bdrfs[i,j] = CT[-1].reshape(len(thetas_r), len(phis_r))
+				dhr[i,j] = bdrf_to_dhr(*CT)
+		# build a linear interpolator
+		points = (thetas_i, phis_i, thetas_r, phis_r)
+		bdrf = RegularGridInterpolator(points, bdrfs) # This is the interpolator that can give us the PDFs we need to sample from. We want to sample from the reflected energy, not the bdrf.
+		points = (thetas_i, phis_i)
+		dhr = RegularGridInterpolator(points, dhr)
+		
+		
+		t0 = time()
+		dist = BDRF_distribution(bdrf)
+		xs, ys = thetas_r, phis_r
+		
+		th_sam = 0.*N.pi/180.
+		x_samples, y_samples, weights = dist.sample(th_sam, phis_i[0], ns)
+		#cProfile.run('sim()', sort='tottime')
+		print('BDRF:', time()-t0, 's')
+
+		hist_th = dist.theoretical_histogram(th_sam, phis_i[0])
+
+		ref = dist.DHR(th_sam, phis_i[0])
+
+		plt.subplots_adjust(left=0.05, wspace=0.3, right=0.95)
+		plt.subplot(131, title='Theoretical histogram', aspect='equal', projection='polar')
+		plt.pcolormesh(ys, xs, hist_th, vmin=N.amin(hist_th), vmax=N.amax(hist_th))
+		plt.colorbar(label='PDF')
+
+		plt.subplot(132, title='Numerical sampling', aspect='equal', projection='polar')
+		hist, edgesx, edgesy = N.histogram2d(x_samples, y_samples, weights=ref*weights/ns, bins=[xs, ys])
+		plt.pcolormesh(ys, xs, hist)#, vmin=N.amin(PDF_th), vmax=N.amax(PDF_th))
+		plt.colorbar(label='PDF')
+
+		plt.subplot(133, title='Relative error', aspect='equal', projection='polar')
+		rel_error = (hist-hist_th)/hist_th*100.
+		plt.pcolormesh(ys, xs, rel_error, cmap='bwr', vmin=-N.amax(N.abs(rel_error)), vmax=N.amax(N.abs(rel_error)))
+		plt.colorbar(label='Relative error (%)')
+
+		plt.savefig(path[0]+'/test_BDRF_i.png')		
+		

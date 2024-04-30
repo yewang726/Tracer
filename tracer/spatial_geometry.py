@@ -16,9 +16,9 @@ def general_axis_rotation(axis,  ang):
     Reference: [1] p.47
     """
     s = N.round_(sin(ang), decimals=14); c = N.round_(cos(ang), decimals=14); v = 1 - c
-    add = N.array([[0,          -axis[2], axis[1]],  
-                            [axis[2],  0,          -axis[0]], 
-                            [-axis[1], axis[0],  0        ] ])
+    add = N.array([[0,   -axis[2], axis[1]],  
+                [axis[2],  0,    -axis[0]], 
+                [-axis[1], axis[0],  0   ]])
     return N.multiply.outer(axis,  axis)*v + N.eye(3)*c + add*s
 
 def rotation_to_z(vecs):

@@ -1,15 +1,42 @@
 import numpy as N
+from tracer.spatial_geometry import general_axis_rotation
 
-def get_angle(v1, v2, signed=False):
+def get_angles(v1, v2, signed=False):
+	'''
+	v1 - (3,n)
+	v2 - (3)
+	'''
 	proj = N.dot(v1.T, v2)
-	signs = -N.sign(proj).T
-	v2s = N.tile(v2, (1,v1.shape[1]))
+	v2s = N.tile(v2, (v1.shape[1],1)).T
 	costheta = proj.T/(N.sqrt(N.sum(v1**2, axis=0))*N.sqrt(N.sum(v2s**2, axis=0)))
 	if signed == True:
-		angs = signs*N.arccos(costheta)
+		angs = -N.sign(proj).T*N.arccos(costheta)
 	else:
 		angs = N.arccos(costheta)
 	return angs
+	
+def get_angle(v1, v2, signed=False):
+	'''
+	v1 - (3)
+	v2 - (3)
+	'''
+	proj = N.dot(v1.T, v2)
+	costheta = proj/(N.sqrt(N.sum(v1**2))*N.sqrt(N.sum(v2**2)))
+	if signed == True:
+		angs = -N.sign(proj)*N.arccos(costheta)
+	else:
+		angs = N.arccos(costheta)
+	return angs
+	
+def rotate_z_to_normals(directions, normals):
+	zs = N.zeros((directions.shape))
+	zs[2] = 1.
+	axes = get_plane_normals(zs.T, normals.T)
+	angles = get_angles(normals, zs[:,0], signed=True)
+	for i, d in enumerate(directions.T):
+		rot = general_axis_rotation(axes[:,i], angles[i])
+		directions[:,i] = N.dot(rot, d)
+	return directions
 
 def project_on_plane(v1, normal):
 	# projects v1 on the plane defined by the normal
@@ -19,10 +46,10 @@ def project_on_plane(v1, normal):
 	proj = v1-proj*normals
 	return proj
 
-def get_plane_normal(v1, v2):
+def get_plane_normals(v1, v2):
 	# returns the normal to a plane defined by v1 and v2
-	plane = N.cross(v1, v2)
-	plane /= N.sqrt(N.sum(plane**2))
+	plane = N.cross(v1, v2).T
+	plane /= N.sqrt(N.sum(plane**2, axis=0))
 	return plane
 
 def get_az_el_th(dirs, norm):

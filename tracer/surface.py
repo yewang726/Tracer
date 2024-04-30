@@ -161,14 +161,14 @@ class Surface(HasFrame):
 				n0.addChild(mat)
 				fluxmap = False
 
-			elif o.__class__.__name__ == 'PeriodicBoundary':
+			if o.__class__.__name__ == 'PeriodicBoundary':
 				mat = coin.SoMaterial()
 				mat.ambientColor = (.0,.5,.5)
 				mat.transparency = (0.8)
 				n0.addChild(mat)
 				fluxmap = False
 
-			elif fluxmap != None:
+			if fluxmap is not None:
 				if hasattr(o,'get_all_hits'):
 					hitdata = o.get_all_hits()
 					xyz = self.global_to_local(hitdata[1])[:3]
@@ -180,6 +180,8 @@ class Surface(HasFrame):
 							flux = [flux]
 					else:
 						fluxmap = False
+				else:
+					fluxmap = False
 			else: 
 				mat = coin.SoMaterial()
 				mat.diffuseColor = (0.2,0.2,0.2)

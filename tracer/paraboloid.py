@@ -25,7 +25,23 @@ class Paraboloid(QuadricGM):
 		QuadricGM.__init__(self)
 		self.a = 1./(a**2)
 		self.b = 1./(b**2)
-
+		
+	def get_ABC(self, ray_bundle):
+		"""
+		Determines the variables forming the relevant quadric equation, [1]
+		"""
+		# Transform the the direction and position of the rays temporarily into the
+		# frame of the paraboloid for calculations
+		d = N.dot(self._working_frame[:3,:3].T, ray_bundle.get_directions())
+		v = N.dot(N.linalg.inv(self._working_frame), 
+			N.vstack((ray_bundle.get_vertices(), N.ones(d.shape[1]))))[:3]
+		
+		A = self.a*d[0]**2 + self.b*d[1]**2
+		B = 2*self.a*d[0]*v[0] + 2*self.b*d[1]*v[1] - d[2] 
+		C = self.a*v[0]**2 + self.b*v[1]**2 - v[2]
+		
+		return A, B, C
+		
 	def _normals(self, hits, directs):
 		"""
 		Finds the normal to the parabola in a bunch of intersection points, by
@@ -51,24 +67,6 @@ class Paraboloid(QuadricGM):
 		normals = N.dot(self._working_frame[:3,:3], local_unit)
 
 		return normals
-
-	
-	def get_ABC(self, ray_bundle):
-		"""
-		Determines the variables forming the relevant quadric equation, [1]
-		"""
-		# Transform the the direction and position of the rays temporarily into the
-		# frame of the paraboloid for calculations
-		d = N.dot(self._working_frame[:3,:3].T, ray_bundle.get_directions())
-		v = N.dot(N.linalg.inv(self._working_frame), 
-			N.vstack((ray_bundle.get_vertices(), N.ones(d.shape[1]))))[:3]
-		
-		A = self.a*d[0]**2 + self.b*d[1]**2
-		B = 2*self.a*d[0]*v[0] + 2*self.b*d[1]*v[1] - d[2] 
-		C = self.a*v[0]**2 + self.b*v[1]**2 - v[2]
-		
-		return A, B, C
-
 
 class ParabolicDishGM(Paraboloid):
 	"""
@@ -324,7 +322,6 @@ class RectangularParabolicDishGM(Paraboloid):
 			y = N.reshape(locs[1], shape)-self._rect_center[1]
 	
 		z = self.a*x**2 + self.b*y**2
-		#print(">>> heliostat", x, y, z)
 		
 		return x, y, z
 	

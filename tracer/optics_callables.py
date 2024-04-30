@@ -6,8 +6,11 @@ from . import optics, ray_bundle, sources
 from .spatial_geometry import rotation_to_z
 import numpy as N
 from scipy.interpolate import RegularGridInterpolator
-from BDRF_models import Cook_Torrance
+from BDRF_models import Cook_Torrance, regular_grid_Cook_Torrance
 from tracer.ray_bundle import RayBundle
+from ray_trace_utils.sampling import BDRF_distribution
+from ray_trace_utils.vector_manipulations import get_angle
+from tracer.spatial_geometry import rotz, general_axis_rotation
 
 import sys, inspect
 
@@ -15,6 +18,13 @@ import sys, inspect
 class optics_callable(object):
 	def reset(self):
 		pass
+		
+	def get_incident_angles(self, directions, normals):
+		vertical = N.sum(directions*normals, axis=0)*normals
+		return N.arccos(N.sqrt(N.sum(vertical**2, axis=0)))
+		
+	def project_to_normals(self, directions, normals):
+		return N.sum(rotation_to_z(normals.T) * directions.T[:,None,:], axis=2).T
 
 class Transparent(optics_callable):
 	"""
@@ -365,7 +375,7 @@ class RealReflective(optics_callable):
 
 			else:
 				th = N.random.normal(scale=self._sig, size=N.shape(ideal_normals[1]))
-				phi = N.random.uniform(low=0., high=N.pi, size=N.shape(ideal_normals[1]))
+				phi = N.random.uniform(low=0., high=2.*N.pi, size=N.shape(ideal_normals[1]))
 				normal_errors_z = N.cos(th)
 				normal_errors_x = N.sin(th)*N.cos(phi)
 				normal_errors_y = N.sin(th)*N.sin(phi)
@@ -505,70 +515,59 @@ class LambertianSpecular(optics_callable):
 			direction=directs, 
 			parents=selector)
 		return outg
+	#'''
+class BDRF_Cook_Torrance_isotropic(optics_callable):
 	'''
-class BDRF_Cook_Torrance(optics_callable):
+	Implements the Cook Torrance BDRF model using linear interpolationsand isotropic assumption
+	Directional absorptance is found by integration of the bdrf
+	Reflected direction by sampling of the normalised interpolated bdrf.
 	'''
-	#Implements the Cook Torrance BDRF model using linear interpolations.
-	#Directional absorptance is found by integration of the bdrf
-	#Reflected direction by sampling of the normalised interpolated bdrf.
-	'''
-	def __init__(self, wavelengths, m, alpha, R_Lam, angular_res_deg=5., axisymmetric_i=True):
+	def __init__(self, m, alpha, R_Lam, angular_res_deg=5., axisymmetric_i=True):
 
 		ares_rad = angular_res_deg*N.pi/180.
 		self._m = m
 		self._alpha = alpha
-		self.R_lam = R_lam
+		self.R_lam = R_Lam
 		# build BDRFs for the relevant wavelengths and incident angles
-		thetas_r, phis_r = N.linspace(0., N.pi/2., N.ceil(N.pi/2./ares_rad)), N.linspace(0., 2.*N.pi, N.ceil(N.pi/2./ares_rad))
-		thetas_i, phis_i = thetas_r, phis_i
+		thetas_r, phis_r = N.linspace(0., N.pi/2., int(N.ceil(N.pi/2./ares_rad))), N.linspace(0., 2.*N.pi, int(N.ceil(N.pi/2./ares_rad)))
+		thetas_i, phis_i = thetas_r, phis_r
 		if axisymmetric_i: # if the bdrf is axisymmetric in incidence angle, no need to do all the phi incident
 			phis_i = phis_i[[0,-1]]
-		bdrfs = []
-		dhr = []
+
+		bdrfs = N.zeros((len(thetas_i), len(phis_i), len(thetas_r), len(phis_r)))
 		for i, thi in enumerate(thetas_i):
 			for j, phi in enumerate(phis_i):
-				for k,wl in enumerate(wavelengths):
-					bdrfs.append(regular_grid_Cook_Torrance(thetas_r_rad=thetas_r, phis_r_rad=phis_r, th_i_rad=thi, phi_i_rad=phi, m=m[k], R_dh_Lam=R_Lam, alpha=alpha))
-					dhr.append(bdrf_to_dhr(thetas_r, phis_r, bdrfs[-1]))
+				CT = regular_grid_Cook_Torrance(thetas_r_rad=thetas_r, phis_r_rad=phis_r, th_i_rad=thi, phi_i_rad=phi, m=m, R_dh_Lam=R_Lam, alpha=alpha)
+				bdrfs[i,j] = CT[-1].reshape(len(thetas_r), len(phis_r))
 		# build a linear interpolator
-		points = (thetas_i, phis_i, wavelengths, thetas_r, phis_r)
-		self.bdrf = RegularGridInterpolator(points, bdrfs) # This is the interpolator that can give us the PDFs we need to sample from. We need to sample from the reflected energy, not the bdrf.
-		points = (thetas_i, phis_i, wavelengths)
-		self.drh = RegularGridInterpolator(points, bdrfs)
-				
+		points = (thetas_i, phis_i, thetas_r, phis_r)
+		self.bdrf = BDRF_distribution(RegularGridInterpolator(points, bdrfs)) # This instance is a BDRF wilth all the necessary functions inclyuded for energy conservative sampling. /!\ Wavelength not included yet!				
 
 	def __call__(self, geometry, rays, selector):
-
-		in_directs = rays.get_directions()[:,selector]
+		#TODO: reflected direction orientation##############################
 		# Incident directions in the frame of reference of the geometry
 		# find Normals
 		normals = geometry.get_normals()
 		# find theta_in
-		
+		directions = rays.get_directions()[:,selector]
+		thetas_in = self.get_incident_angles(directions, normals)
 		energy_out = rays.get_energy()[selector]
-		
-		# determine the directional-hemispherical reflectance for each ray:
-		ref = self.drh(thetas_i, phis_i, wavelengths)
-		energy_out = energy_out*ref
 		# sample reflected directions:
-		
-		# for each theta_in
-			# get the bdrf for a given theta_in
-			
-			# Find the reflectance via integration
-
-
-			# sample a reflected direction given theta_in			
-		
-		directs = 
+		for i, theta_in in enumerate(thetas_in):
+			# sample a reflected direction given theta_in		
+			dhr = self.bdrf.DHR(theta_in, 0)
+			theta_r, phi_r, weights = self.bdrf.sample(theta_in, 0, 1)
+			energy_out[i] *= dhr*weights
+			directions[:,i] = N.array([N.sin(theta_r)*N.cos(phi_r), N.sin(theta_r)*N.sin(phi_r), N.cos(theta_r)]).T
+		### IMPORTANT: need to check for asymmetrical BRDF etc.
 		outg = rays.inherit(selector,
 			vertices=geometry.get_intersection_points_global(),
-			energy=energy,
-			direction=directs, 
+			energy=energy_out,
+			direction=self.project_to_normals(directions, normals), 
 			parents=selector)
 
 		return outg
-	'''
+	#'''
 class PeriodicBoundary(optics_callable):
 	'''
 	The ray intersections incident on the surface are translated by a given period in the direction of the surface normal, creating a perdiodic boundary condition.

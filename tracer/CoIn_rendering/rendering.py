@@ -221,8 +221,8 @@ Reference:
 		self.r.addChild(no)
 
 	def show_rays(self, escaping_len=.02, max_rays=None, resolution=None, fluxmap=None, trans=False, vmin=None, vmax=None, bounding_boxes=None, only_rays=False):
+		self.rays(escaping_len, max_rays, resolution)
 		if not only_rays:
 			self.geom(resolution, fluxmap, trans, vmin, vmax, bounding_boxes)
-		self.rays(escaping_len, max_rays, resolution)
 		self.show()
 
