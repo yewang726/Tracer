@@ -2,7 +2,6 @@
 
 import operator
 import numpy as N
-from pivy import coin
 
 from tracer.spatial_geometry import general_axis_rotation
 from tracer.has_frame import HasFrame
@@ -149,6 +148,7 @@ class Assembly(HasFrame):
 			s.get_optics_manager().reset()
 
 	def get_scene_graph(self,resolution, fluxmap, trans, vmin, vmax, bounding_boxes):
+		from pivy import coin
 		n0 = coin.SoSeparator()
 		n = self.get_scene_graph_transform()
 
