@@ -23,9 +23,10 @@ library. NO GUI yet.
 DISCLAIMER: The documentation and installation is outdated, but he project is active! Doubts, need advice?: charlesalexis.asselineau@ump.es
 
 Current capablilities:
-- Flat, parabolic, spherical and conical surfaces
+- Flat, parabolic, spherical, conical and quadric surfaces
 - Specular and diffuse reflections with surface slope error
 - BDRF
+- Transparency and attenuation
 - A bunch of results analysis tools
 - Pillbox and Buie sunshape implementations
 - Radiosity sytem solver for thermal emissions
