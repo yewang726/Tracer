@@ -6,7 +6,6 @@
 # [3] Warren J. Smith, Modern Optical Engineering, 4th Ed., 2008; p. 208.
 
 import numpy as N
-from electromagnetics import fresnel_to_attenuating
 
 def fresnel(ray_dirs, normals, n1, n2):
 	"""Determines what ratio of the ray bundle is reflected and what is refracted, 
@@ -57,6 +56,26 @@ def fresnel_conductor(ray_dirs, normals, lambdas, material, n1=1., m2=None):
 		m2 = material.m(lambdas)
 	theta_in = N.arccos(N.abs((normals*ray_dirs).sum(axis=0)))
 	R_p, R_s, theta2 = fresnel_to_attenuating(n1, m2, theta_in)
+	return R_p, R_s, theta2
+	
+def fresnel_to_attenuating(n1, m2, theta1):
+	'''
+	From Modest Chapter 2 -  The Interface between a Perfect Dielectric and
+an Absorbing Medium.
+	returns:
+	parallel (p) and perpendicular (s) polarized reflectivities + transmission (refraction) angle
+	'''
+	b = (m2.real**2 - m2.imag**2- (n1*N.sin(theta1))**2)	
+	a = N.sqrt(b**2 + 4.*(m2.real*m2.imag)**2 ) 
+
+	p = N.sqrt(0.5*(a+b))
+	q = N.sqrt(0.5*(a-b))
+
+	theta2 = N.arctan(n1*N.sin(theta1)/p)
+
+	R_s = ((n1*N.cos(theta1)-p)**2+q**2)/((n1*N.cos(theta1)+p)**2+q**2) # s is perpendicular to the plane of incidence	
+	R_p = ((p-n1*N.sin(theta1)*N.tan(theta1))**2+q**2)/((p+n1*N.sin(theta1)*N.tan(theta1))**2+q**2)*R_s # p is parallel to the plane of incidence
+	
 	return R_p, R_s, theta2
 
 def polarised_reflections(ray_dirs, normals, R_p, R_s, E_p, E_s):
