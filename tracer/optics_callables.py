@@ -6,7 +6,7 @@ from . import optics, ray_bundle, sources
 from .spatial_geometry import rotation_to_z
 import numpy as N
 from scipy.interpolate import RegularGridInterpolator
-from BDRF_models import Cook_Torrance, regular_grid_Cook_Torrance
+#from BDRF_models import Cook_Torrance, regular_grid_Cook_Torrance
 from tracer.ray_bundle import RayBundle
 from ray_trace_utils.sampling import BDRF_distribution
 from ray_trace_utils.vector_manipulations import get_angle
