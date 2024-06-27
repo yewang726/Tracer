@@ -73,7 +73,9 @@ class Assembly(HasFrame):
 		them, and the objects are guarantied to be ordered the same as in 
 		self.get_objects()
 		"""
-		return N.ravel([obj.get_surfaces() for obj in self.get_objects()])
+		surfaces = [surface for obj in self.get_objects() for surface in obj.get_surfaces()]
+		#surface = N.ravel([obj.get_surfaces() for obj in self.get_objects()])
+		return surfaces
 
 	def add_object(self, object, transform=None):
 		"""

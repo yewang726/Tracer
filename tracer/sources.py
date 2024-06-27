@@ -40,7 +40,8 @@ def isotropic_directions_sampling(num_rays, ang_range, normals=None):
 	xi2 = random.uniform(size=num_rays) # Rtheta
 	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
 	dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
-	dirs = rotate_z_to_normals(dirs, normals)
+	if normals is not None:
+		dirs = rotate_z_to_normals(dirs, normals)
 	return dirs
 
 def pillbox_sunshape_directions(num_rays, ang_range):

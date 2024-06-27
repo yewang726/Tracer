@@ -42,7 +42,7 @@ class TracerEngine():
 		ret_shape = (nsurfs, nrays)
 		rays_mins = N.ones(nrays)*N.inf
 		earlier_hit = N.zeros(nrays, dtype=N.bool)
-		earliest_surf = -1*N.ones(nrays, dtype=N.int)
+		earliest_surf = -1*N.ones(nrays, dtype=int)
 		surf_stack = N.zeros(nrays)
 
 		# Bounce rays off each object
@@ -88,7 +88,7 @@ class TracerEngine():
 		owned_rays = N.empty(ret_shape, dtype=N.bool)
 		rays_mins = N.ones(nrays)*N.inf
 		earlier_hit = N.zeros(nrays, dtype=N.bool)
-		earliest_surf = -1*N.ones(nrays, dtype=N.int)
+		earliest_surf = -1*N.ones(nrays, dtype=int)
 		surf_stack = N.zeros(nrays)
 
 		# Bounce rays off each object
@@ -135,7 +135,7 @@ class TracerEngine():
 		ret_shape = (nsurfs, nrays)
 		owned_rays = N.empty(ret_shape, dtype=N.bool)
 		rays_mins = N.ones(nrays)*N.inf
-		earliest_surf = -1*N.ones(nrays, dtype=N.int)
+		earliest_surf = -1*N.ones(nrays, dtype=int)
 		latest_order = N.amax(surf_relevancy, axis=0)
 		# Bounce rays off each object
 		for surf_num in range(len(surfaces)):
