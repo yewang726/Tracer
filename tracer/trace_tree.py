@@ -3,7 +3,7 @@
 
 import numpy as np
 
-class RayTree(object):
+class RayTree:
     def __init__(self):
         self._bunds = []
         
@@ -45,14 +45,15 @@ class RayTree(object):
         if level is None:
             level = self.num_bunds()
         
-        parents = np.empty(level)
+        parents = np.empty(level, dtype=int)
         parents[0] = ray_index
         
-        for pix in xrange(1, level):
+        for pix in range(1, level):
             parents[pix] = \
-                self._bunds[level - pix + 1].get_parents()[parents[pix - 1]]
+                self._bunds[level - pix].get_parents()[parents[pix - 1]]
         
         return parents
+
 
 
 # vim: et:ts=4

@@ -2,7 +2,6 @@
 
 import operator
 import numpy as N
-from pivy import coin
 
 from tracer.spatial_geometry import general_axis_rotation
 from tracer.has_frame import HasFrame
@@ -74,7 +73,9 @@ class Assembly(HasFrame):
 		them, and the objects are guarantied to be ordered the same as in 
 		self.get_objects()
 		"""
-		return N.ravel([obj.get_surfaces() for obj in self.get_objects()])
+		surfaces = [surface for obj in self.get_objects() for surface in obj.get_surfaces()]
+		#surface = N.ravel([obj.get_surfaces() for obj in self.get_objects()])
+		return surfaces
 
 	def add_object(self, object, transform=None):
 		"""
@@ -149,6 +150,7 @@ class Assembly(HasFrame):
 			s.get_optics_manager().reset()
 
 	def get_scene_graph(self,resolution, fluxmap, trans, vmin, vmax, bounding_boxes):
+		from pivy import coin
 		n0 = coin.SoSeparator()
 		n = self.get_scene_graph_transform()
 

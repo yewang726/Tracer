@@ -3,7 +3,6 @@
 import numpy as N
 from tracer.spatial_geometry import general_axis_rotation
 from tracer.assembly import Assembly
-from pivy import coin
 
 class AssembledObject(Assembly):
 	""" Defines an assembly of surfaces as an object. The object has its own set of 

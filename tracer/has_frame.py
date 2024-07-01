@@ -1,7 +1,6 @@
 # Represents an object that is locatable in 3D space with 6 degrees of freedom.
 
 import numpy as N
-import pivy.coin as coin
 
 class HasFrame(object):
     """
@@ -80,6 +79,8 @@ class HasFrame(object):
         Create the Coin3D transform to translate and rotate this frame, in
         accordance with the self._rot and self._loc matrices held in this class.
         """
+        import pivy.coin as coin
+        
         n = coin.SoSeparator()
         if N.any(self._loc != N.array((0,0,0))):
             tr = coin.SoTranslation()

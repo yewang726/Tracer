@@ -515,7 +515,50 @@ class LambertianSpecular(optics_callable):
 			direction=directs, 
 			parents=selector)
 		return outg
-	#'''
+        
+
+class LambertianSpecular_IAM(optics_callable):
+	"""
+	Represents the optics of surface with mixed specular and diffuse characteristics. Specularity is the ratio of incident rays that are specularly reflected to the total number of rays incident on the surface.
+	"""
+	def __init__(self, absorptivity=0., specularity=0.5, a_r=0.16):
+		self._abs = absorptivity
+		self.specularity = specularity
+		self.a_r = a_r
+	
+	def __call__(self, geometry, rays, selector):
+		"""
+		Arguments:
+		geometry - a GeometryManager which knows about surface normals, hit
+			points etc.
+		rays - the incoming ray bundle (all of it, not just rays hitting this
+			surface)
+		selector - indices into ``rays`` of the hitting rays.
+		"""
+		in_directs = rays.get_directions()[:,selector]
+		normals = geometry.get_normals()
+		directs = N.zeros(in_directs.shape)
+		vertical = N.sum(directs*normals, axis=0)*normals
+		cos_theta_AOI = N.sqrt(N.sum(vertical**2, axis=0))
+
+		specular = N.random.rand(len(selector))<self.specularity
+
+		directs[:,specular] = optics.reflections(in_directs[:,specular], normals[:,specular])
+		direct_lamb = sources.pillbox_sunshape_directions(N.sum(~specular), ang_range=N.pi/2.)
+		directs[:,~specular] = N.sum(rotation_to_z(normals[:,~specular].T) * direct_lamb.T[:,None,:], axis=2).T
+
+		outg = rays.inherit(selector,
+			vertices=geometry.get_intersection_points_global(),
+			energy=rays.get_energy()[selector]*(1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r))),
+			direction=directs, 
+			parents=selector)
+            
+		if outg.has_property('spectra'):
+			outg._spectra *= (1. - self._abs*(1.-N.exp(-cos_theta_AOI/self.a_r))/(1.-N.exp(-1./self.a_r)))   
+         
+		return outg
+
+
 class BDRF_Cook_Torrance_isotropic(optics_callable):
 	'''
 	Implements the Cook Torrance BDRF model using linear interpolationsand isotropic assumption
