@@ -74,7 +74,6 @@ class Assembly(HasFrame):
 		self.get_objects()
 		"""
 		surfaces = [surface for obj in self.get_objects() for surface in obj.get_surfaces()]
-		#surface = N.ravel([obj.get_surfaces() for obj in self.get_objects()])
 		return surfaces
 
 	def add_object(self, object, transform=None):
@@ -145,7 +144,7 @@ class Assembly(HasFrame):
 		for obj in self._assemblies + self._objects:
 			obj.transform_children(N.dot(assembly_transform, const_t))
 			
-	def rest_all_optics(self):
+	def reset_all_optics(self):
 		for s in self.get_surfaces():
 			s.get_optics_manager().reset()
 
@@ -168,7 +167,6 @@ class Assembly(HasFrame):
 				nedges = []
 				if b:
 					minp, maxp = b._AABB
-					
 					# base
 					coords.extend([(minp[0], minp[1], minp[2]),\
 								  (maxp[0], minp[1], minp[2]),\

@@ -60,9 +60,12 @@ class BoundaryBox(BoundaryShape):
 		AABB - axis aligned bounding box: array or list of [minpoint, maxpoint] with minpoint the lowest dimensions corner of the axis-aligned bounding box and maxpoint the the highest dimensions corner of the axis-aligned bounding box, in the local surface referential. The implementation automatically transforms these points to global coordinates each time there is a transform applied to the object/assembly.
 		"""
 		BoundaryShape.__init__(self, location, rotation)
-		self._AABB = N.array(aabb)
-		minx, miny, minz = self._AABB[0]
-		maxx, maxy, maxz = self._AABB[1]
+		self._aabb = aabb # local box
+		self._AABB = N.array(aabb) # global box
+		
+	def update_AABB(self):
+		minx, miny, minz = self._aabb[0]
+		maxx, maxy, maxz = self._aabb[1]
 		fullbox = N.zeros((8, 3))
 		fullbox[::2,0] = minx
 		fullbox[1::2,0] = maxx
@@ -70,10 +73,13 @@ class BoundaryBox(BoundaryShape):
 		fullbox[[2,3,6,7],1] = maxy
 		fullbox[:4,2] = minz
 		fullbox[4:,2] = maxz
-		
 		fullbox = N.dot(self._temp_frame, N.concatenate((fullbox, N.ones((8,1))), axis=1).T)[:-1]
 		self._minpoint, self._maxpoint = N.array(AABB(fullbox))
 		self._AABB = N.array([self._minpoint, self._maxpoint])
+		
+	def transform_frame(self, transform):
+		BoundaryShape.transform_frame(self, transform)
+		self.update_AABB()
 		
 	def in_bounds(self, bund_vertices):
 		# test intersection of vertices with AABB in global coordinates
