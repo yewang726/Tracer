@@ -210,7 +210,7 @@ class TracerEngine():
 		if accel:
 			if Kd_Tree is None:
 				max_depth = 8+1.3*N.log(num_surfs)
-				logging.info('Maximum Kd tree depth %i'%max_depth)
+				logging.debug('Maximum Kd tree depth %i'%max_depth)
 				min_leaf = 1
 				fast = False
 				if accel == 'fast':
