@@ -2,7 +2,7 @@
 
 import numpy as N
 from tracer.quadric import QuadricGM
-
+import logging
 
 class InfiniteCone(QuadricGM):
 	"""
@@ -358,7 +358,7 @@ class RectCutConicalFrustum(ConicalFrustum):
 		self.half_dims = N.array([w/2., h/2.])
 		self.zmin, self.zmax = N.sort([z1, z2])
 		if (N.sqrt(N.sum(self.half_dims**2))<=N.amin([r1, r2])).all():
-			print('Bad rectangular cut frustum shape, width and height too small')
+			logging.error('Bad rectangular cut frustum shape, width and height too small')
 			stop
 
 	def _select_coords(self, coords, prm):

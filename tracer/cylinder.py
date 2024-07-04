@@ -7,6 +7,7 @@ References:
 
 from .quadric import QuadricGM
 import numpy as N
+import logging
 
 class InfiniteCylinder(QuadricGM):
 	"""
@@ -163,7 +164,7 @@ class RectCutCylinder(FiniteCylinder):
 		FiniteCylinder.__init__(self, diameter, height)
 		self.half_dims = N.array([w/2., h/2.])
 		if (N.sqrt(N.sum(self.half_dims**2))<=self._R).all():
-			print('Bad rectangular cut cylindershape, width and height too small')
+			logging.error('Bad rectangular cut cylindershape, width and height too small')
 			stop
 
 	def _select_coords(self, coords, prm):

@@ -354,9 +354,10 @@ class RoundPlateGM(FiniteFlatGM):
 			raise ValueError("Radius must be positive")
 		if Ri != None:
 			if Ri >= Re:
-				print('Ri: ',Ri, 'Re: ', Re)
+				logging.error('Inner Radius must be lower than the outer one. Ri: {} Re: {}'.format(Ri, Re))
 				raise ValueError("Inner Radius must be lower than the outer one")
 			if Ri <= 0.:
+				logging.error('Radius must be positive. Ri: {} Re: {}'.format(Ri, Re))
 				raise ValueError("Radius must be positive")
 		
 		self._Ri = Ri	   

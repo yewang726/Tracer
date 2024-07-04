@@ -2,6 +2,7 @@ import numpy as N
 import time
 from tracer.object import AssembledObject
 from ray_trace_utils.vector_manipulations import AABB
+import logging
 
 class Kdtodo(object):
 	'''
@@ -17,7 +18,7 @@ class KdTree(object):
 	Acceleration tree stucture class containing building methods and traversal methods.
 	'''
 	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False):
-		print('Building tree')
+		logging.debug('Building tree')
 		self.nodes = []
 		t0 = time.time()
 
@@ -121,10 +122,10 @@ class KdTree(object):
 			self.nodes_info = nodes_info[:node_idx]
 
 		t1 = time.time()-t0
-		print('build_time: ', t1, 's')
-		print('maximum level', node_level)
+		logging.debug('build_time: ', t1, 's')
+		logging.debug('maximum level', node_level)
 		self.build_time = t1
-		print('Kd-Tree built')
+		logging.debug('Kd-Tree built')
 
 
 	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=500., emptyBonus=0.2):
@@ -181,7 +182,7 @@ class KdTree(object):
 					i+=1
 
 				if SAH_res is not None:
-					#print 'split', SAH_res, a, bounds_axis[SAH_res]
+					#logging.debug 'split', SAH_res, a, bounds_axis[SAH_res]
 					return int(a), bounds_axis[SAH_res]
 		return 3, Ns
 			
@@ -270,7 +271,7 @@ class KdTree(object):
 						else:
 							break
 		t1 = time.time()-t0
-		print('traversal_time: ', t1, 's')
+		logging.debug('traversal_time: ', t1, 's')
 		return earliest_surf, owned_rays
 
 	def traversal(self, bundle, ordered=False):
@@ -361,7 +362,7 @@ class KdTree(object):
 			any_inter = True
 
 		t1 = time.time()-t0
-		print('traversal_time: ', t1, 's')
+		logging.debug('traversal_time: ', t1, 's')
 		return any_inter, surfaces_relevancy
 
 	def intersect_bounds(self, poss, dirs, inv_dirs, bounds):
