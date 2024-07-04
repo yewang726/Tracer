@@ -302,7 +302,7 @@ class TracerEngine():
                 # This is not useful in Python3
 			if bund.get_num_rays() == 0:
 				# All rays escaping
-				logging.info('Ray bundle depleted')
+				logging.debug('Ray bundle depleted')
 				break
 
 			t1 = time.time()-t0
@@ -310,7 +310,7 @@ class TracerEngine():
 				ray_ownership = N.hstack(out_ray_own)
 				surfs_relevancy = N.hstack(new_surfs_relevancy)
 			else:
-				logging.info('trace time %s s' %t1)
+				logging.debug('trace time %s s' %t1)
 
 		if not tree:
 			# Save only the last bundle. Don't bother moving weak rays to end.
