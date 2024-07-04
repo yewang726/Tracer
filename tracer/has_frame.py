@@ -27,12 +27,12 @@ class HasFrame(object):
         if rotation is None:
             rotation = N.eye(3)
 
-        self._transform = N.zeros((4,4))
-        self._transform[3,:] = N.r_[0, 0, 0, 1]
+        self._transform = N.eye(4)
         self.set_location(location)
         self.set_rotation(rotation)
+        self._transform[:3,3] = self._loc
+        self._transform[:3,:3] = self._rot
         self._temp_frame = self._transform
-
 
     def get_location(self):
         return self._loc
@@ -69,7 +69,7 @@ class HasFrame(object):
 
     def transform_frame(self, transform):
         """Updates the transformation matrix that puts the surface into the global
-        coordinates. I.e., if the object the surface is in is rotated, than the surface
+        coordinates. I.e., if the object the surface is in is rotated, then the surface
         is also rotated.  It then defines a temporary rotated frame for use of
         calculations."""
         self._temp_frame = N.dot(transform, self._transform)

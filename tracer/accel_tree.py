@@ -40,6 +40,7 @@ class KdTree(object):
 		self.always_relevant = [] # This handles situations in which we have no declared boundaries. This attribute gets used bythe traversal algorithm to always make the listed bjects relevant in the ray-trace.
 		i = 0
 		# load all the data
+
 		for index, bounds_o in enumerate(boundaries):
 			if bounds_o == []:
 				self.always_relevant.append(index)
@@ -53,7 +54,6 @@ class KdTree(object):
 
 		# find the first bounding box
 		self.minpoint, self.maxpoint = AABB(bounds)
-	
 		# Initialise the root node
 		root_info = NodeInfo(minpoint=self.minpoint[:,None], maxpoint=self.maxpoint[:,None], level=0)
 		nodes_info = self.add_node(1, [root_info])
@@ -127,7 +127,7 @@ class KdTree(object):
 		print('Kd-Tree built')
 
 
-	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., emptyBonus=0.2):
+	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=500., emptyBonus=0.2):
 		'''
 		Based on:
 		https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Kd-Tree_Accelerator

@@ -22,7 +22,7 @@ class AssembledObject(Assembly):
 		rotation - 3 by 3 rotation matrix of teh object
 		transform - a 4x4 array representing the homogenous transformation 
 			matrix of this object relative to the coordinate system of its 
-			container (this can be overridden in the Assembly.add_object method). Tranform overrides the location and rotation arguments.
+			container (this can be overridden in the Assembly.add_object method). Transform overrides the location and rotation arguments.
 		"""
 		# Use the supplied values or some defaults:
 		if surfs is None:
@@ -76,9 +76,8 @@ class AssembledObject(Assembly):
 	def transform_children(self, assembly_transform=N.eye(4)):
 		"""Transforms an object if the assembly is transformed""" 
 		const_t = self.get_transform()
-		for member in self.surfaces + self.boundaries:
-			if member:
-				member.transform_frame(N.dot(assembly_transform, const_t))
+		for child in self.surfaces + self.boundaries:
+			child.transform_frame(N.dot(assembly_transform, const_t))
 	
 	def own_rays(self, rays, surface_id):
 		"""

@@ -29,34 +29,28 @@ class TracerEngine():
 		
 		Arguments:
 		bundle - the RayBundle instance holding incoming rays.
-		ownership - an array with the owning object instance for each ray in the
-			bundle, or -1 for no ownership.
+
 		
 		Returns:
-		stack - an s by r boolean array for s surfaces and r rays, stating
-			for each surface i=1..s if it is intersected by ray j=1..r
-		owned_rays - same size as stack, stating whether ray j was tested at all
-			by surface i
+		
 		"""
 		nrays = bundle.get_num_rays()
 		nsurfs = len(surfaces)
-		ret_shape = (nsurfs, nrays)
 		rays_mins = N.ones(nrays)*N.inf
 		earlier_hit = N.zeros(nrays, dtype=N.bool)
 		earliest_surf = -1*N.ones(nrays, dtype=int)
-		surf_stack = N.zeros(nrays)
 
 		# Bounce rays off each object
 		for surf_num in range(nsurfs):
-			# Elements of owned_rays[surfnum] set to 1 if (rays dont own any surface or rays own the actual surface) and the surface is relevant to these rays.
-			# If no ray is owned, skip the rest
-			if not surf_relevancy[surf_num].any():
+			if surf_relevancy[surf_num].any():
+				# If all rays are relevant all the bundle goes into in_rays
+				if surf_relevancy[surf_num].all():
+					in_rays = bundle
+				else: # ...Otherwise, the bundle inherits the relevant only
+					in_rays = bundle.inherit(surf_relevancy[surf_num])   
+			else: # if not a relevant surface for intersection, next surface:
 				continue
-			# If some rays are not owned, the bundle inherits the owned_rays only
-			if (~surf_relevancy[surf_num]).any():
-				in_rays = bundle.inherit(surf_relevancy[surf_num])   
-			else: # ...Otherwise all the bundle goes into in_rays
-				in_rays = bundle
+				
 			# Fills the stack assigning rays to surfaces hit.
 			surf_stack = surfaces[surf_num].register_incoming(in_rays) # find intersections using surface geometry manager
 			surf_stack[surf_stack==0.] = N.inf # if intersection distance is 0, set this as not an intersection
@@ -197,6 +191,7 @@ class TracerEngine():
 		NB: the order of the rays within the arrays may change, but they are tracked
 		by the ray tree
 		"""
+
 		self.reps = reps
 		self.minener = min_energy
 		self.tree = RayTree()
@@ -213,11 +208,9 @@ class TracerEngine():
 		surfs_relevancy = N.ones((num_surfs, num_rays), dtype=N.bool)
 
 		if accel:
-			'''
-			/!\ All objects need to have bounds in the current implementation! Infinite boundaries exist but they are not handled by the KdTree builder (SAF metric explodes)
-			'''
 			if Kd_Tree is None:
 				max_depth = 8+1.3*N.log(num_surfs)
+				logging.info('Maximum Kd tree depth %i'%max_depth)
 				min_leaf = 1
 				fast = False
 				if accel == 'fast':
@@ -309,7 +302,7 @@ class TracerEngine():
                 # This is not useful in Python3
 			if bund.get_num_rays() == 0:
 				# All rays escaping
-				logging.debug('Ray bundle depleted')
+				logging.info('Ray bundle depleted')
 				break
 
 			t1 = time.time()-t0
@@ -317,7 +310,7 @@ class TracerEngine():
 				ray_ownership = N.hstack(out_ray_own)
 				surfs_relevancy = N.hstack(new_surfs_relevancy)
 			else:
-				logging.debug('trace time %s s' %t1)
+				logging.info('trace time %s s' %t1)
 
 		if not tree:
 			# Save only the last bundle. Don't bother moving weak rays to end.
