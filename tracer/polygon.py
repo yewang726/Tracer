@@ -1,6 +1,6 @@
 import numpy as N
-from geometry_manager import GeometryManager
-from flat_surface import FiniteFlatGM
+from tracer.geometry_manager import GeometryManager
+from tracer.flat_surface import FiniteFlatGM
 
 
 class FlatSimplePolygonGM(FiniteFlatGM):
