@@ -110,7 +110,7 @@ class TracerEngine():
 
 		return earliest_surf, owned_rays
 
-	def ray_tracer(self, bundle, reps=100, min_energy=1e-10, tree=True, accel=False, Kd_Tree=None):
+	def ray_tracer(self, bundle, reps=100, min_energy=1e-10, tree=True, accel=False, Kd_Tree=None, **kwargs):
 		"""
 		Creates a ray bundle or uses a reflected ray bundle, and intersects it
 		with all objects, uses intersect_ray(). Based on the intersections,
@@ -165,7 +165,7 @@ class TracerEngine():
 				fast = False
 				if accel == 'fast':
 					fast = True
-				self.Kd_Tree = KdTree(self._asm, max_depth, min_leaf, fast=fast)
+				self.Kd_Tree = KdTree(self._asm, max_depth, min_leaf, fast=fast, **kwargs)
 			else:
 				self.Kd_Tree = Kd_Tree
 		else: # these are legacy arrays from the original code from Y. Meller. The objective is that the objects, through their own_rays and surface_for_next_iteration methods, drive the next bundle restrictions. It requires object-specific interaction managementm which is less relevant if we use a generic binary tree type acceleration.
