@@ -35,79 +35,30 @@ class TracerEngine():
 		
 		"""
 		nrays = bundle.get_num_rays()
-		nsurfs = len(surfaces)
 		rays_mins = N.ones(nrays)*N.inf
-		earlier_hit = N.zeros(nrays, dtype=N.bool)
 		earliest_surf = -1*N.ones(nrays, dtype=int)
 
 		# Bounce rays off each object
-		for surf_num in range(nsurfs):
-			if surf_relevancy[surf_num].any():
+		for surf_num, surf in enumerate(surfaces):
+			rays_rel = N.copy(surf_relevancy[surf_num])
+			if rays_rel.any():
 				# If all rays are relevant all the bundle goes into in_rays
-				if surf_relevancy[surf_num].all():
+				if rays_rel.all():
 					in_rays = bundle
 				else: # ...Otherwise, the bundle inherits the relevant only
-					in_rays = bundle.inherit(surf_relevancy[surf_num])   
+					in_rays = bundle.inherit(rays_rel)   
 			else: # if not a relevant surface for intersection, next surface:
 				continue
 				
 			# Fills the stack assigning rays to surfaces hit.
-			surf_stack = surfaces[surf_num].register_incoming(in_rays) # find intersections using surface geometry manager
+			surf_stack = surf.register_incoming(in_rays) # find intersections using surface geometry manager
 			surf_stack[surf_stack==0.] = N.inf # if intersection distance is 0, set this as not an intersection
-			earlier_hit = surf_stack < rays_mins[surf_relevancy[surf_num]] # compare intersection distance with this surface with rays_mins relevant for this surface to find if the currently detected hit is the earliest.
+			earlier_hit = surf_stack < rays_mins[rays_rel] # compare intersection distance with this surface with rays_mins relevant for this surface to find if the currently detected hit is the earliest.
 			if earlier_hit.any():
-				rays_mins[surf_relevancy[surf_num]] = N.where(earlier_hit, surf_stack, rays_mins[surf_relevancy[surf_num]]) # update earliest ray_intersection
-				earliest_surf[surf_relevancy[surf_num]] = N.where(earlier_hit, surf_num, earliest_surf[surf_relevancy[surf_num]]) # update earliest surface intersected
-
+				rays_rel[rays_rel] = earlier_hit
+				rays_mins[rays_rel] = surf_stack[earlier_hit]
+				earliest_surf[rays_rel] = surf_num
 		return earliest_surf, surf_relevancy
-
-	def intersect_ray_old(self, bundle, surfaces, objects, surf_ownership, ray_ownership, surf_relevancy):
-		"""
-		Finds the first surface intersected by each ray.
-		
-		Arguments:
-		bundle - the RayBundle instance holding incoming rays.
-		ownership - an array with the owning object instance for each ray in the
-			bundle, or -1 for no ownership.
-		
-		Returns:
-		stack - an s by r boolean array for s surfaces and r rays, stating
-			for each surface i=1..s if it is intersected by ray j=1..r
-		owned_rays - same size as stack, stating whether ray j was tested at all
-			by surface i
-		"""
-
-		nrays = bundle.get_num_rays()
-		nsurfs = len(surfaces)
-		ret_shape = (nsurfs, nrays)
-		owned_rays = N.empty(ret_shape, dtype=N.bool)
-		rays_mins = N.ones(nrays)*N.inf
-		earlier_hit = N.zeros(nrays, dtype=N.bool)
-		earliest_surf = -1*N.ones(nrays, dtype=int)
-		surf_stack = N.zeros(nrays)
-
-		# Bounce rays off each object
-		for surf_num in range(nsurfs):
-			# Elements of owned_rays[surfnum] set to 1 if (rays dont own any surface or rays own the actual surface) and the surface is relevant to these rays.
-			owned_rays[surf_num] = ((ray_ownership == -1) | (ray_ownership == surf_ownership[surf_num])) & surf_relevancy[surf_num]
-			# If no ray is owned, skip the rest
-			if not owned_rays[surf_num].any():
-				continue
-			# If some rays are not owned, the bundle inherits the owned_rays only
-			if (~owned_rays[surf_num]).any():
-				in_rays = bundle.inherit(owned_rays[surf_num])   
-			else: # ...Otherwise all the bundle goes into in_rays
-				in_rays = bundle
-			# Fills the stack assigning rays to surfaces hit.
-			surf_stack = surfaces[surf_num].register_incoming(in_rays) # find intersections using surface geometry manager
-			surf_stack[surf_stack==0.] = N.inf # if intersection distance is 0, set this as not an intersection
-			earlier_hit = surf_stack < rays_mins[owned_rays[surf_num]] # compare intersection distance with this surface with rays_mins relevant for this surface to find if the currently detected hit is the earliest.
-			#print 'earlier_hit', earlier_hit
-			if earlier_hit.any():
-				rays_mins[owned_rays[surf_num]] = N.where(earlier_hit, surf_stack, rays_mins[owned_rays[surf_num]]) # update earliest ray_intersection
-				earliest_surf[owned_rays[surf_num]] = N.where(earlier_hit, surf_num, earliest_surf[owned_rays[surf_num]]) # update earliest surface intersected
-
-		return earliest_surf, owned_rays
 
 	def intersect_ray_accel(self, bundle, surfaces, objects, surf_relevancy):
 		"""
@@ -198,14 +149,13 @@ class TracerEngine():
 		bund = bundle
 		if tree is True:
 			self.tree.append(bund)
-		
+
 		# A list of surfaces and their matching objects:
 		surfaces = self._asm.get_surfaces()
 		objects = self._asm.get_objects()
-		
+
 		num_surfs = len(surfaces)
 		num_rays = bund.get_num_rays()
-		surfs_relevancy = N.ones((num_surfs, num_rays), dtype=N.bool)
 
 		if accel:
 			if Kd_Tree is None:
@@ -215,7 +165,6 @@ class TracerEngine():
 				fast = False
 				if accel == 'fast':
 					fast = True
-
 				self.Kd_Tree = KdTree(self._asm, max_depth, min_leaf, fast=fast)
 			else:
 				self.Kd_Tree = Kd_Tree
@@ -224,6 +173,7 @@ class TracerEngine():
 			surfs_until_obj = N.hstack((N.r_[0], N.add.accumulate(surfs_per_obj)))
 			surf_ownership = N.repeat(N.arange(len(objects)), surfs_per_obj)
 			ray_ownership = -1*N.ones(num_rays)
+			surfs_relevancy = N.ones((num_surfs, num_rays), dtype=bool)
 
 		for i in range(reps):
 			t0 = time.time()
@@ -239,18 +189,18 @@ class TracerEngine():
 					if any_inter:
 						front_surf, owned_rays = self.intersect_ray(bund, surfaces, surfs_relevancy)
 			else:
-				front_surf, owned_rays = self.intersect_ray_old(bund, surfaces, objects, surf_ownership, ray_ownership, surfs_relevancy)
+				front_surf, owned_rays = self.intersect_ray(bund, surfaces, surfs_relevancy)#self.intersect_ray_old(bund, surfaces, objects, surf_ownership, ray_ownership, surfs_relevancy)
 				
 			outg = []
 			record = []
-			out_ray_own = []
-			new_surfs_relevancy = []
 			weak_ray_pos = []
+			if not accel:
+				out_ray_own = []
+				new_surfs_relevancy = []
 
 			for surf_idx in range(num_surfs):
 
 				intersections = front_surf[owned_rays[surf_idx]] == surf_idx # -1 are excluded automagically here
-
 				if not any(intersections):
 					surfaces[surf_idx].done()
 					continue

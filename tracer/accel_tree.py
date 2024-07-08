@@ -30,15 +30,18 @@ class KdTree(object):
 
 		n_surfs = len(assembly.get_surfaces())
 		boundaries = [o.get_boundaries() for o in objects]
-		bounds_per_surf = N.array([len(b) for b in boundaries]) # needed for multi[ple boundaries per shape
-		total_bounds = N.sum(bounds_per_surf) # total number of boundaries
-		surfs_idx = N.repeat(N.arange(n_surfs), bounds_per_surf) # indices of shapes belonging to each boundary
+		bounds_per_object = N.array([len(b) for b in boundaries]) # boundaries per object
+		total_bounds = N.sum(bounds_per_object) # total number of boundaries
+
+		surf_per_object = N.array([len(o.get_surfaces()) for o in objects]) # number of surfaces per object
+		idx_surfs_per_object = [N.arange(N.sum(surf_per_object[:i]), N.sum(surf_per_object[:i+1])) for i, spo in enumerate(surf_per_object)] # Ordered index of the surfaces in each object.
+		surfs_idx = N.repeat(idx_surfs_per_object, bounds_per_object)  # indices of surfaces relevant to each bounday
 
 		minpoints = N.empty((3,total_bounds))
 		maxpoints = N.empty((3,total_bounds))
 		bounds = N.empty((3,2*total_bounds))
 		
-		self.always_relevant = [] # This handles situations in which we have no declared boundaries. This attribute gets used bythe traversal algorithm to always make the listed bjects relevant in the ray-trace.
+		self.always_relevant = [] # This handles situations in which we have no declared boundaries. This attribute gets used by the traversal algorithm to always make the listed bjects relevant in the ray-trace.
 		i = 0
 		# load all the data
 
@@ -53,9 +56,9 @@ class KdTree(object):
 					bounds[:,2*i+1] = b._maxpoint
 					i+=1
 
-		# find the first bounding box
+		# find the largest bounding box
 		self.minpoint, self.maxpoint = AABB(bounds)
-		# Initialise the root node
+		# Initialise the root node info used to build the tree.
 		root_info = NodeInfo(minpoint=self.minpoint[:,None], maxpoint=self.maxpoint[:,None], level=0)
 		nodes_info = self.add_node(1, [root_info])
 		n_nodes = len(self.nodes) # Number of nodes actively added to the tree
@@ -128,7 +131,7 @@ class KdTree(object):
 		logging.debug('Kd-Tree built')
 
 
-	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=500., emptyBonus=0.2):
+	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., emptyBonus=0.2):
 		'''
 		Based on:
 		https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Kd-Tree_Accelerator
@@ -290,9 +293,9 @@ class KdTree(object):
 		any_inter = False
 
 		if ordered:
-			surfaces_relevancy = -1*N.ones((self.n_surfs, bundle.get_num_rays()), dtype=N.int)
+			surfaces_relevancy = -1*N.ones((self.n_surfs, bundle.get_num_rays()), dtype=int)
 		else:
-			surfaces_relevancy = N.zeros((self.n_surfs, bundle.get_num_rays()), dtype=N.bool)
+			surfaces_relevancy = N.zeros((self.n_surfs, bundle.get_num_rays()), dtype=bool)
 
 		if inters.any():
 			# for rays that do intersect, go down the tree (or up?):
