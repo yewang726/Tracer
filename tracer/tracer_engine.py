@@ -249,7 +249,7 @@ class TracerEngine():
 					record = bund + record.inherit(N.nonzero(weak_ray_pos)[0])
 					self.tree.append(record)
 				#gc.collect() # This was found useful to avoid memory error when using large bundles and/or broadband sources.
-                # This is not useful in Python3
+				# This is not useful in Python3
 			if bund.get_num_rays() == 0:
 				# All rays escaping
 				logging.debug('Ray bundle depleted')

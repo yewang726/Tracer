@@ -20,7 +20,7 @@ class KdTree(object):
 	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False, t_trav=1., t_isec=500., emptyBonus=0.2, split_threshold=None):
 		logging.debug('Building tree')
 		self.nodes = []
-        self.t_trav=t_trav
+		self.t_trav=t_trav
 		self.t_isec=t_isec
 		self.emptyBonus=emptyBonus
 		self.split_threshold=split_threshold
