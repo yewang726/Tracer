@@ -110,7 +110,7 @@ class TracerEngine():
 
 		return earliest_surf, owned_rays
 
-	def ray_tracer(self, bundle, reps=100, min_energy=1e-10, tree=True, accel=False, Kd_Tree=None):
+	def ray_tracer(self, bundle, reps=100, min_energy=1e-10, tree=True, accel=False, Kd_Tree=None, **kwargs):
 		"""
 		Creates a ray bundle or uses a reflected ray bundle, and intersects it
 		with all objects, uses intersect_ray(). Based on the intersections,
@@ -160,12 +160,15 @@ class TracerEngine():
 		if accel:
 			if Kd_Tree is None:
 				max_depth = 8+1.3*N.log(num_surfs)
-				logging.info('Maximum Kd tree depth %i'%max_depth)
+				logging.debug('Maximum Kd tree depth %i'%max_depth)
 				min_leaf = 1
 				fast = False
 				if accel == 'fast':
 					fast = True
-				self.Kd_Tree = KdTree(self._asm, max_depth, min_leaf, fast=fast)
+				if 'min_leaf' in kwargs:
+					self.Kd_Tree = KdTree(self._asm, max_depth, fast = fast, **kwargs)
+				else:
+					self.Kd_Tree = KdTree(self._asm, max_depth, fast = fast, min_leaf = 1, **kwargs)
 			else:
 				self.Kd_Tree = Kd_Tree
 		else: # these are legacy arrays from the original code from Y. Meller. The objective is that the objects, through their own_rays and surface_for_next_iteration methods, drive the next bundle restrictions. It requires object-specific interaction managementm which is less relevant if we use a generic binary tree type acceleration.
@@ -249,10 +252,10 @@ class TracerEngine():
 					record = bund + record.inherit(N.nonzero(weak_ray_pos)[0])
 					self.tree.append(record)
 				#gc.collect() # This was found useful to avoid memory error when using large bundles and/or broadband sources.
-                # This is not useful in Python3
+				# This is not useful in Python3
 			if bund.get_num_rays() == 0:
 				# All rays escaping
-				logging.info('Ray bundle depleted')
+				logging.debug('Ray bundle depleted')
 				break
 
 			t1 = time.time()-t0
@@ -260,15 +263,15 @@ class TracerEngine():
 				ray_ownership = N.hstack(out_ray_own)
 				surfs_relevancy = N.hstack(new_surfs_relevancy)
 			else:
-				logging.info('trace time %s s' %t1)
+				logging.debug(f'trace time {t1} s')
 
 		if not tree:
 			# Save only the last bundle. Don't bother moving weak rays to end.
 			record = concatenate_rays(record)
 			self.tree.append(record)
 		if bund.get_num_rays() != 0:
-			logging.warning(bund.get_num_rays(), 'rays left at the end of the simulation')
-			logging.warning('Remaining energy in last bundle:', N.sum(bund.get_energy())/N.sum(bundle.get_energy())*100., '%')
+			logging.warning(f'{bund.get_num_rays()} rays left at the end of the simulation')
+			logging.warning(f'Remaining energy in last bundle: {N.sum(bund.get_energy())/N.sum(bundle.get_energy())*100.}%')
 		return bund.get_vertices(), bund.get_directions()
 
 

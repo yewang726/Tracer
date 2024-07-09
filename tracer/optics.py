@@ -6,6 +6,7 @@
 # [3] Warren J. Smith, Modern Optical Engineering, 4th Ed., 2008; p. 208.
 
 import numpy as N
+import logging
 
 def fresnel(ray_dirs, normals, n1, n2):
 	"""Determines what ratio of the ray bundle is reflected and what is refracted, 
@@ -126,7 +127,7 @@ def generalised_fresnel(ray_dirs, normals, lambdas, material1, material2):
 	https://www-sciencedirect-com.virtual.anu.edu.au/science/article/pii/S002240730500066X
 	INCOMPLETE
 	'''
-	print("WIP")
+	logging.error("WIP")
 	stop
 	m1, m2 = material1.m(lambdas), material2.m(lambdas)
 	N1, K1 = apparent_NK(m1, alpha1)

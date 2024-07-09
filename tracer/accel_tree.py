@@ -2,6 +2,7 @@ import numpy as N
 import time
 from tracer.object import AssembledObject
 from ray_trace_utils.vector_manipulations import AABB
+import logging
 
 class Kdtodo(object):
 	'''
@@ -16,9 +17,13 @@ class KdTree(object):
 	'''
 	Acceleration tree stucture class containing building methods and traversal methods.
 	'''
-	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False):
-		print('Building tree')
+	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False, t_trav=1., t_isec=500., empty_bonus=0.2, split_threshold=None):
+		logging.debug('Building tree')
 		self.nodes = []
+		self.t_trav=t_trav
+		self.t_isec=t_isec
+		self.empty_bonus=empty_bonus
+		self.split_threshold=split_threshold
 		t0 = time.time()
 
 		# Get boundaries
@@ -90,7 +95,7 @@ class KdTree(object):
 			else:
 				# find/determine split
 				bounds_in_node = bounds[:, N.tile(in_node,2)]
-				split = self.determine_split(minpoint, maxpoint, minpoints[:,in_node], maxpoints[:,in_node], bounds_in_node, n_bounds=n_bounds)
+				split = self.determine_split(minpoint, maxpoint, minpoints[:,in_node], maxpoints[:,in_node], bounds_in_node, n_bounds=n_bounds, t_trav=self.t_trav, t_isec=self.t_isec, empty_bonus=self.empty_bonus, split_threshold=self.split_threshold)
 				if split[0] == 3:
 					# make parent node a leaf:
 					self.nodes[node_idx].flag = 3
@@ -124,13 +129,13 @@ class KdTree(object):
 			self.nodes_info = nodes_info[:node_idx]
 
 		t1 = time.time()-t0
-		print('build_time: ', t1, 's')
-		print('maximum level', node_level)
+		logging.debug(f'build_time: {t1}s')
+		logging.debug(f'maximum level{node_level}')
 		self.build_time = t1
-		print('Kd-Tree built')
+		logging.debug('Kd-Tree built')
 
 
-	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., emptyBonus=0.2):
+	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., empty_bonus=0.2, split_threshold=None):
 		'''
 		Based on:
 		https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Kd-Tree_Accelerator
@@ -175,7 +180,7 @@ class KdTree(object):
 					N_B = N.count_nonzero(minpoints_axis <= b) # Below
 					p_A = S_inv*(diag0tdiag1 +(maxpoint_parent_axis-b)*diag0pdiag1)
 					p_B = S_inv*(diag0tdiag1 +(b-minpoint_parent_axis)*diag0pdiag1)
-					b_e = ((N_A == 0) or (N_B == 0))*emptyBonus
+					b_e = ((N_A == 0) or (N_B == 0))*empty_bonus
 					newcost = basecost + t_isec*(1.-b_e)*(p_A*N_A+p_B*N_B)
 
 					if newcost<cost:
@@ -184,9 +189,51 @@ class KdTree(object):
 					i+=1
 
 				if SAH_res is not None:
-					#print 'split', SAH_res, a, bounds_axis[SAH_res]
+					# Adjust the split based on object count
+					if split_threshold is None:
+						return int(a), bounds_axis[SAH_res]
+					adjusted_split = self.adjust_split(bounds_axis[SAH_res], minpoint_parent, maxpoint_parent, minpoints, maxpoints, a, split_threshold)
 					return int(a), bounds_axis[SAH_res]
 		return 3, Ns
+
+
+	def adjust_split(self, split, minpoint, maxpoint, minpoints, maxpoints, axis, threshold=0.1):
+		"""
+		Adjust the split position based on the count of objects within each node
+		to achieve an approximately equal count on both sides, if the difference exceeds the threshold.
+		"""
+		left_count = np.sum(maxpoints[axis] < split)
+		right_count = np.sum(minpoints[axis] > split)
+		total_count = left_count + right_count
+
+		# If total count is zero, no adjustment is needed
+		if total_count == 0:
+			return split
+
+		# Calculate the proportion of objects on each side
+		left_proportion = left_count / total_count
+		right_proportion = right_count / total_count
+
+		# If the difference in proportions is within the threshold, no adjustment is needed
+		if abs(left_proportion - right_proportion) <= threshold:
+			return split
+
+		# Calculate the desired number of objects on each side
+		desired_count = total_count / 2
+
+		# Iteratively adjust the split position to balance the counts
+		adjustment_step = (maxpoint[axis] - minpoint[axis]) * 0.01  # Step size for adjustment
+
+		while abs(left_count - right_count) > (threshold * total_count):  # Continue until the counts are approximately equal
+			if left_count > desired_count:
+				split += adjustment_step
+			else:
+				split -= adjustment_step
+			
+			left_count = np.sum(maxpoints[axis] < split)
+			right_count = np.sum(minpoints[axis] > split)
+
+		return split
 			
 		
 	def add_node(self, n, nodes_info):
@@ -209,8 +256,8 @@ class KdTree(object):
 		bounds = N.array([self.minpoint, self.maxpoint])
 		inters, t_mins, t_maxs = self.intersect_bounds(poss, dirs, inv_dirs, bounds)
 
-		earliest_surf = -1*N.ones(poss.shape[1], dtype=N.int)
-		owned_rays = N.empty((len(surfaces), poss.shape[1]), dtype=N.bool)
+		earliest_surf = -1*N.ones(poss.shape[1], dtype=int)
+		owned_rays = N.empty((len(surfaces), poss.shape[1]), dtype=bool)
 
 		n_inters = len(inters)
 
@@ -273,7 +320,7 @@ class KdTree(object):
 						else:
 							break
 		t1 = time.time()-t0
-		print('traversal_time: ', t1, 's')
+		logging.debug(f'traversal_time: {t1}s')
 		return earliest_surf, owned_rays
 
 	def traversal(self, bundle, ordered=False):
@@ -364,7 +411,7 @@ class KdTree(object):
 			any_inter = True
 
 		t1 = time.time()-t0
-		print('traversal_time: ', t1, 's')
+		logging.debug(f'traversal_time: {t1}s')
 		return any_inter, surfaces_relevancy
 
 	def intersect_bounds(self, poss, dirs, inv_dirs, bounds):
