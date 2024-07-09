@@ -165,7 +165,10 @@ class TracerEngine():
 				fast = False
 				if accel == 'fast':
 					fast = True
-				self.Kd_Tree = KdTree(self._asm, max_depth, min_leaf, fast=fast, **kwargs)
+				if 'min_leaf' in kwargs:
+					self.Kd_Tree = KdTree(self._asm, max_depth, fast = fast, **kwargs)
+				else:
+					self.Kd_Tree = KdTree(self._asm, max_depth, fast = fast, min_leaf = 1, **kwargs)
 			else:
 				self.Kd_Tree = Kd_Tree
 		else: # these are legacy arrays from the original code from Y. Meller. The objective is that the objects, through their own_rays and surface_for_next_iteration methods, drive the next bundle restrictions. It requires object-specific interaction managementm which is less relevant if we use a generic binary tree type acceleration.
@@ -260,15 +263,15 @@ class TracerEngine():
 				ray_ownership = N.hstack(out_ray_own)
 				surfs_relevancy = N.hstack(new_surfs_relevancy)
 			else:
-				logging.debug('trace time %s s' %t1)
+				logging.debug(f'trace time {t1} s')
 
 		if not tree:
 			# Save only the last bundle. Don't bother moving weak rays to end.
 			record = concatenate_rays(record)
 			self.tree.append(record)
 		if bund.get_num_rays() != 0:
-			logging.warning(bund.get_num_rays(), 'rays left at the end of the simulation')
-			logging.warning('Remaining energy in last bundle:', N.sum(bund.get_energy())/N.sum(bundle.get_energy())*100., '%')
+			logging.warning(f'{bund.get_num_rays()} rays left at the end of the simulation')
+			logging.warning(f'Remaining energy in last bundle: {N.sum(bund.get_energy())/N.sum(bundle.get_energy())*100.}%')
 		return bund.get_vertices(), bund.get_directions()
 
 

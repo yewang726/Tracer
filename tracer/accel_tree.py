@@ -17,12 +17,12 @@ class KdTree(object):
 	'''
 	Acceleration tree stucture class containing building methods and traversal methods.
 	'''
-	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False, t_trav=1., t_isec=500., emptyBonus=0.2, split_threshold=None):
+	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False, t_trav=1., t_isec=500., empty_bonus=0.2, split_threshold=None):
 		logging.debug('Building tree')
 		self.nodes = []
 		self.t_trav=t_trav
 		self.t_isec=t_isec
-		self.emptyBonus=emptyBonus
+		self.empty_bonus=empty_bonus
 		self.split_threshold=split_threshold
 		t0 = time.time()
 
@@ -95,7 +95,7 @@ class KdTree(object):
 			else:
 				# find/determine split
 				bounds_in_node = bounds[:, N.tile(in_node,2)]
-				split = self.determine_split(minpoint, maxpoint, minpoints[:,in_node], maxpoints[:,in_node], bounds_in_node, n_bounds=n_bounds, t_trav=self.t_trav, t_isec=self.t_isec, emptyBonus=self.emptyBonus, split_threshold=self.split_threshold)
+				split = self.determine_split(minpoint, maxpoint, minpoints[:,in_node], maxpoints[:,in_node], bounds_in_node, n_bounds=n_bounds, t_trav=self.t_trav, t_isec=self.t_isec, empty_bonus=self.empty_bonus, split_threshold=self.split_threshold)
 				if split[0] == 3:
 					# make parent node a leaf:
 					self.nodes[node_idx].flag = 3
@@ -129,13 +129,13 @@ class KdTree(object):
 			self.nodes_info = nodes_info[:node_idx]
 
 		t1 = time.time()-t0
-		logging.debug('build_time: ', t1, 's')
-		logging.debug('maximum level', node_level)
+		logging.debug(f'build_time: {t1}s')
+		logging.debug(f'maximum level{node_level}')
 		self.build_time = t1
 		logging.debug('Kd-Tree built')
 
 
-	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., emptyBonus=0.2, split_threshold=None):
+	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., empty_bonus=0.2, split_threshold=None):
 		'''
 		Based on:
 		https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Kd-Tree_Accelerator
@@ -180,7 +180,7 @@ class KdTree(object):
 					N_B = N.count_nonzero(minpoints_axis <= b) # Below
 					p_A = S_inv*(diag0tdiag1 +(maxpoint_parent_axis-b)*diag0pdiag1)
 					p_B = S_inv*(diag0tdiag1 +(b-minpoint_parent_axis)*diag0pdiag1)
-					b_e = ((N_A == 0) or (N_B == 0))*emptyBonus
+					b_e = ((N_A == 0) or (N_B == 0))*empty_bonus
 					newcost = basecost + t_isec*(1.-b_e)*(p_A*N_A+p_B*N_B)
 
 					if newcost<cost:
@@ -320,7 +320,7 @@ class KdTree(object):
 						else:
 							break
 		t1 = time.time()-t0
-		logging.debug('traversal_time: ', t1, 's')
+		logging.debug(f'traversal_time: {t1}s')
 		return earliest_surf, owned_rays
 
 	def traversal(self, bundle, ordered=False):
@@ -411,7 +411,7 @@ class KdTree(object):
 			any_inter = True
 
 		t1 = time.time()-t0
-		logging.debug('traversal_time: ', t1, 's')
+		logging.debug(f'traversal_time: {t1}s')
 		return any_inter, surfaces_relevancy
 
 	def intersect_bounds(self, poss, dirs, inv_dirs, bounds):
