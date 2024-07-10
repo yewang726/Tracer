@@ -250,7 +250,7 @@ class KdTree(object):
 			self.nodes.append(Node())
 			nodes_info.append(NodeInfo())
 		return nodes_info			
-
+		
 
 	def direct_traversal(self, bundle, surfaces):
 		'''
@@ -282,7 +282,7 @@ class KdTree(object):
 				todopos = 0
 				to_do = [Kdtodo(0, t_min, t_max) for _ in range(64)]  # factor 4 faster than for-loop
 				
-				node = self.nodes[to_do[todopos].node]
+				node = self.nodes[to_do[todopos][0]]
 				while True:
 					if (t_maxs[r] < t_min):
 						break
@@ -305,9 +305,9 @@ class KdTree(object):
 						elif (t_plane<t_min):
 							node = self.nodes[c2]
 						else:
-							to_do[todopos].node = c2
-							to_do[todopos].tmin = t_plane
-							to_do[todopos].tmax = t_max
+							to_do[todopos][0] = c2
+							to_do[todopos][1] = t_plane
+							to_do[todopos][2] = t_max
 							todopos += 1
 							node = self.nodes[c1]
 							t_max = t_plane
@@ -323,9 +323,9 @@ class KdTree(object):
 
 						if todopos>0:
 							todopos -= 1
-							node = self.nodes[to_do[todopos].node]
-							t_min = to_do[todopos].tmin
-							t_max = to_do[todopos].tmax
+							node = self.nodes[to_do[todopos][0]]
+							t_min = to_do[todopos][1]
+							t_max = to_do[todopos][2]
 						else:
 							break
 		t1 = time.time()-t0
@@ -359,8 +359,8 @@ class KdTree(object):
 					continue
 				t_min, t_max = t_mins[r], t_maxs[r]
 				todopos = 0
-				to_do = [Kdtodo(0, t_min, t_max) for _ in range(64)]  # factor 4 faster than for-loop
-				node = self.nodes[to_do[todopos].node]
+				to_do = [[0, t_min, t_max] for _ in range(64)]  # factor 4 faster than for-loop
+				node = self.nodes[to_do[todopos][0]]
 				if ordered:
 					order = 0
 				while True:
@@ -384,9 +384,9 @@ class KdTree(object):
 						elif (t_plane<t_min):
 							node = self.nodes[c2]
 						else:
-							to_do[todopos].node = c2
-							to_do[todopos].tmin = t_plane
-							to_do[todopos].tmax = t_max
+							to_do[todopos][0] = c2
+							to_do[todopos][1] = t_plane
+							to_do[todopos][2] = t_max
 							todopos += 1
 							node = self.nodes[c1]
 							t_max = t_plane
@@ -401,9 +401,9 @@ class KdTree(object):
 
 						if todopos>0:
 							todopos -= 1
-							node = self.nodes[to_do[todopos].node]
-							t_min = to_do[todopos].tmin
-							t_max = to_do[todopos].tmax
+							node = self.nodes[to_do[todopos][0]]
+							t_min = to_do[todopos][1]
+							t_max = to_do[todopos][2]
 						else:
 							break
 
