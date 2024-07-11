@@ -17,27 +17,36 @@ class KdTree(object):
 	'''
 	Acceleration tree stucture class containing building methods and traversal methods.
 	'''
-	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, debug=False, fast=False, t_trav=1., t_isec=500., empty_bonus=0.2, split_threshold=None):
-		logging.debug('Building tree')
+	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, loglevel=logging.DEBUG, debug=False, fast=False, t_trav=1., t_isec=500., empty_bonus=0.2, split_threshold=None):
+		self.loglevel = loglevel
 		self.nodes = []
+		
 		self.t_trav=t_trav
 		self.t_isec=t_isec
 		self.empty_bonus=empty_bonus
 		self.split_threshold=split_threshold
-		t0 = time.time()
+		self.fast = fast
+		self.min_leaf=min_leaf
+		self.max_depth=max_depth
 
 		# Get boundaries
 		if isinstance(assembly, AssembledObject):
-			objects = [assembly]
+			self.objects = [assembly]
 		else:
-			objects = assembly.get_objects()
+			self.objects = assembly.get_objects()
 
-		n_surfs = len(assembly.get_surfaces())
-		boundaries = [o.get_boundaries() for o in objects]
+		self.n_surfs = len(assembly.get_surfaces())
+		self.debug = False
+		self.build_tree()
+
+	def build_tree(self):
+		logging.log(self.loglevel, 'Building tree')
+		t0 = time.time()
+		boundaries = [o.get_boundaries() for o in self.objects]
 		bounds_per_object = N.array([len(b) for b in boundaries]) # boundaries per object
 		total_bounds = N.sum(bounds_per_object) # total number of boundaries
 
-		surf_per_object = N.array([len(o.get_surfaces()) for o in objects]) # number of surfaces per object
+		surf_per_object = N.array([len(o.get_surfaces()) for o in self.objects]) # number of surfaces per object
 		idx_surfs_per_object = [N.arange(N.sum(surf_per_object[:i]), N.sum(surf_per_object[:i+1])) for i, spo in enumerate(surf_per_object)] # Ordered index of the surfaces in each object.
 		surfs_idx = N.repeat(idx_surfs_per_object, bounds_per_object)  # indices of surfaces relevant to each bounday
 
@@ -68,7 +77,7 @@ class KdTree(object):
 		n_nodes = len(self.nodes) # Number of nodes actively added to the tree
 		node_idx = 0 # index of the currently allocated node.
 
-		if fast == True:
+		if self.fast == True:
 			n_bounds = 12
 		else:
 			n_bounds = None
@@ -88,7 +97,7 @@ class KdTree(object):
 			# Set the current level:
 			node_level = nodes_info[node_idx].get_level()
 
-			if (in_node_count<=min_leaf) or (node_level>=max_depth):
+			if (in_node_count<=self.min_leaf) or (node_level>=self.max_depth):
 				# make node a leaf:
 				self.nodes[node_idx].flag = 3
 				self.nodes[node_idx].surfaces_idxs = surfs_idx[in_node]
@@ -124,8 +133,8 @@ class KdTree(object):
 
 		# remove unused node data
 		self.nodes = self.nodes[:node_idx]
-		self.n_surfs = n_surfs
-		if debug:
+
+		if self.debug:
 			self.nodes_info = nodes_info[:node_idx]
 
 		t1 = time.time()-t0
@@ -234,13 +243,14 @@ class KdTree(object):
 			right_count = np.sum(minpoints[axis] > split)
 
 		return split
-			
-		
+
+
 	def add_node(self, n, nodes_info):
 		for i in range(n):
 			self.nodes.append(Node())
 			nodes_info.append(NodeInfo())
-		return nodes_info
+		return nodes_info			
+		
 
 	def direct_traversal(self, bundle, surfaces):
 		'''
@@ -270,10 +280,9 @@ class KdTree(object):
 					continue
 				t_min, t_max = t_mins[r], t_maxs[r]
 				todopos = 0
-				to_do = []
-				for i in range(64):
-					to_do.append(Kdtodo(0, t_min, t_max))
-				node = self.nodes[to_do[todopos].node]
+				to_do = [[0, t_min, t_max] for _ in range(64)]  # factor 4 faster than for-loop
+				
+				node = self.nodes[to_do[todopos][0]]
 				while True:
 					if (t_maxs[r] < t_min):
 						break
@@ -296,9 +305,9 @@ class KdTree(object):
 						elif (t_plane<t_min):
 							node = self.nodes[c2]
 						else:
-							to_do[todopos].node = c2
-							to_do[todopos].tmin = t_plane
-							to_do[todopos].tmax = t_max
+							to_do[todopos][0] = c2
+							to_do[todopos][1] = t_plane
+							to_do[todopos][2] = t_max
 							todopos += 1
 							node = self.nodes[c1]
 							t_max = t_plane
@@ -314,9 +323,9 @@ class KdTree(object):
 
 						if todopos>0:
 							todopos -= 1
-							node = self.nodes[to_do[todopos].node]
-							t_min = to_do[todopos].tmin
-							t_max = to_do[todopos].tmax
+							node = self.nodes[to_do[todopos][0]]
+							t_min = to_do[todopos][1]
+							t_max = to_do[todopos][2]
 						else:
 							break
 		t1 = time.time()-t0
@@ -350,14 +359,11 @@ class KdTree(object):
 					continue
 				t_min, t_max = t_mins[r], t_maxs[r]
 				todopos = 0
-				to_do = []
-				for i in range(64):
-					to_do.append(Kdtodo(0, t_min, t_max))
-				node = self.nodes[to_do[todopos].node]
+				to_do = [[0, t_min, t_max] for _ in range(16)]
+				node = self.nodes[to_do[todopos][0]]
 				if ordered:
 					order = 0
 				while True:
-
 					if (t_maxs[r] < t_min):
 						break
 					# Is node a leaf?
@@ -367,11 +373,10 @@ class KdTree(object):
 						t_plane = (split_pos-poss[split_axis,r]) * inv_dirs[split_axis,r]
 
 						# Get node children and sort them:
-						c1 = node.child
-						c2 = c1 + 1
+						c1, c2 = node.child, node.child + 1
 						belowfirst = (poss[split_axis,r] < split_pos) or (poss[split_axis,r] == split_pos and dirs[split_axis,r]<=0.)
 
-						if ~belowfirst:
+						if not belowfirst:
 							c1, c2 = c2, c1
 
 						if (t_plane>t_max) or (t_plane<=0.):
@@ -379,12 +384,16 @@ class KdTree(object):
 						elif (t_plane<t_min):
 							node = self.nodes[c2]
 						else:
-							to_do[todopos].node = c2
-							to_do[todopos].tmin = t_plane
-							to_do[todopos].tmax = t_max
+							to_do[todopos][0] = c2
+							to_do[todopos][1] = t_plane
+							to_do[todopos][2] = t_max
 							todopos += 1
 							node = self.nodes[c1]
 							t_max = t_plane
+							
+							if todopos >= len(to_do):
+								to_do += [[0, t_min, t_max] for _ in range(len(to_do))]
+								logging.log(self.loglevel, f"Expanding todo list to {len(to_do)} elements")
 					else: # leaf
 						if ordered:
 							surfaces_relevancy[node.surfaces_idxs.tolist(),r] = order
@@ -396,11 +405,12 @@ class KdTree(object):
 
 						if todopos>0:
 							todopos -= 1
-							node = self.nodes[to_do[todopos].node]
-							t_min = to_do[todopos].tmin
-							t_max = to_do[todopos].tmax
+							node = self.nodes[to_do[todopos][0]]
+							t_min = to_do[todopos][1]
+							t_max = to_do[todopos][2]
 						else:
 							break
+					
 
 		# If some objects had no bounds, we malke them permanently relevant for all rays.
 		if ordered:
@@ -425,8 +435,8 @@ class KdTree(object):
 			swap = t_mins_i>t_maxs_i
 
 			t_mins_i[swap], t_maxs_i[swap] = t_maxs_i[swap], t_mins_i[swap]
-			t_mins = N.amax([t_mins, t_mins_i], axis=0)
-			t_maxs = N.amin([t_maxs, t_maxs_i], axis=0)
+			t_mins = N.maximum(t_mins, t_mins_i) # about factor 5 improvement over N.amax of list
+			t_maxs = N.minimum(t_maxs, t_maxs_i)
 
 		inters = t_maxs>0
 		inters[t_mins>t_maxs] = False

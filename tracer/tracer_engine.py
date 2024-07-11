@@ -13,7 +13,7 @@ class TracerEngine():
 	Tracer Engine implements that actual ray tracing. It keeps track of the number
 	of objects, and determines which rays intersected which object.
 	"""
-	def __init__(self, parent_assembly):
+	def __init__(self, parent_assembly, loglevel = logging.DEBUG):
 		"""
 		Arguments:
 		parent_assembly - the highest level assembly
@@ -22,6 +22,7 @@ class TracerEngine():
 		_asm - the Assembly instance containing the model to trace through.
 		"""
 		self._asm = parent_assembly
+		self.loglevel = loglevel
 
 	def intersect_ray(self, bundle, surfaces, surf_relevancy):
 		"""
@@ -91,7 +92,7 @@ class TracerEngine():
 			if not owned_rays[surf_num].any():
 				continue
 			# If some rays are not owned, the bundle inherits the owned_rays only
-			if (~owned_rays[surf_num]).any():
+			if not owned_rays[surf_num].all():
 				in_rays = bundle.inherit(owned_rays[surf_num])
 			   # ...Otherwise all the bundle goes into in_rays
 			else:
@@ -160,15 +161,16 @@ class TracerEngine():
 		if accel:
 			if Kd_Tree is None:
 				max_depth = 8+1.3*N.log(num_surfs)
-				logging.debug('Maximum Kd tree depth %i'%max_depth)
+				logging.log(self.loglevel, 'Maximum Kd tree depth %i'%max_depth)
 				min_leaf = 1
 				fast = False
 				if accel == 'fast':
 					fast = True
+
 				if 'min_leaf' in kwargs:
-					self.Kd_Tree = KdTree(self._asm, max_depth, fast = fast, **kwargs)
+					self.Kd_Tree = KdTree(self._asm, max_depth, loglevel = self.loglevel, fast = fast, **kwargs)
 				else:
-					self.Kd_Tree = KdTree(self._asm, max_depth, fast = fast, min_leaf = 1, **kwargs)
+					self.Kd_Tree = KdTree(self._asm, max_depth, loglevel = self.loglevel, fast = fast, min_leaf = 1, **kwargs)
 			else:
 				self.Kd_Tree = Kd_Tree
 		else: # these are legacy arrays from the original code from Y. Meller. The objective is that the objects, through their own_rays and surface_for_next_iteration methods, drive the next bundle restrictions. It requires object-specific interaction managementm which is less relevant if we use a generic binary tree type acceleration.
@@ -255,7 +257,7 @@ class TracerEngine():
 				# This is not useful in Python3
 			if bund.get_num_rays() == 0:
 				# All rays escaping
-				logging.debug('Ray bundle depleted')
+				logging.log(self.loglevel, 'Ray bundle depleted')
 				break
 
 			t1 = time.time()-t0
@@ -263,7 +265,7 @@ class TracerEngine():
 				ray_ownership = N.hstack(out_ray_own)
 				surfs_relevancy = N.hstack(new_surfs_relevancy)
 			else:
-				logging.debug(f'trace time {t1} s')
+				logging.log(self.loglevel, f'trace time {t1} s')
 
 		if not tree:
 			# Save only the last bundle. Don't bother moving weak rays to end.
