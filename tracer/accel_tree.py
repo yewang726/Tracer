@@ -280,7 +280,7 @@ class KdTree(object):
 					continue
 				t_min, t_max = t_mins[r], t_maxs[r]
 				todopos = 0
-				to_do = [Kdtodo(0, t_min, t_max) for _ in range(64)]  # factor 4 faster than for-loop
+				to_do = [[0, t_min, t_max] for _ in range(64)]  # factor 4 faster than for-loop
 				
 				node = self.nodes[to_do[todopos][0]]
 				while True:
@@ -359,7 +359,7 @@ class KdTree(object):
 					continue
 				t_min, t_max = t_mins[r], t_maxs[r]
 				todopos = 0
-				to_do = [[0, t_min, t_max] for _ in range(64)]  # factor 4 faster than for-loop
+				to_do = [[0, t_min, t_max] for _ in range(16)]
 				node = self.nodes[to_do[todopos][0]]
 				if ordered:
 					order = 0
@@ -390,6 +390,10 @@ class KdTree(object):
 							todopos += 1
 							node = self.nodes[c1]
 							t_max = t_plane
+							
+							if todopos >= len(to_do):
+								to_do += [[0, t_min, t_max] for _ in range(len(to_do))]
+								logging.log(self.loglevel, f"Expanding todo list to {len(to_do)} elements")
 					else: # leaf
 						if ordered:
 							surfaces_relevancy[node.surfaces_idxs.tolist(),r] = order
@@ -406,6 +410,7 @@ class KdTree(object):
 							t_max = to_do[todopos][2]
 						else:
 							break
+					
 
 		# If some objects had no bounds, we malke them permanently relevant for all rays.
 		if ordered:
