@@ -50,10 +50,16 @@ class FlatGeometryManager(GeometryManager):
 		negative = params < 1e-7
 		params[negative] = N.inf
 		
-		self._params = params
-		self._backside = dt > 0.
+		if hasattr(self, '_params'):
+			self._params = N.hstack([self._params, params])
+		else:
+			self._params = params
+		if hasattr(self, '_backside'):
+			self._backside = N.hstack([self._backside, dt > 0.])
+		else:
+			self._backside = dt > 0.
 
-		return params
+		return self._params
 		
 	def select_rays(self, idxs):
 		"""
@@ -73,7 +79,10 @@ class FlatGeometryManager(GeometryManager):
 		del self._params
 		
 		# Global coordinates on the surface:
-		self._global = v + p[None,:]*d
+		if hasattr(self, '_global'):
+			self._global = N.concatenate([self._global, v + p[None,:]*d], axis=-1)
+		else:
+			self._global = v + p[None,:]*d
 	
 	def get_normals(self):
 		"""
@@ -103,6 +112,8 @@ class FlatGeometryManager(GeometryManager):
 			del self._global
 		if hasattr(self, '_idxs'):
 			del self._idxs
+		if hasattr(self, '_backside'):
+			del self._backside
 
 class FiniteFlatGM(FlatGeometryManager):
 	"""
@@ -140,13 +151,23 @@ class FiniteFlatGM(FlatGeometryManager):
 		
 		# Global coordinates on the surface:
 		oldsettings = N.seterr(invalid='ignore')
-		self._global = v + p[None,:]*d
+		glob = v + p[None,:]*d
+
+		if hasattr(self, '_global'):
+			self._global = N.concatenate([self._global, glob], axis=-1)
+		else:
+			self._global = glob
+			
 		N.seterr(**oldsettings)
 		# above we ignore invalid values. Those rays can't be selected anyway.
 		# Local should be deleted by children in their find_intersections.
-
-		self._local = N.dot(N.linalg.inv(self._working_frame),
-			N.vstack((self._global, N.ones(self._global.shape[1]))))
+		
+		if hasattr(self, '_local'):
+			self._local = N.concatenate([self._local, N.dot(N.linalg.inv(self._working_frame),
+			N.vstack((glob, N.ones(glob.shape[1]))))], axis=-1)
+		else:	
+			self._local = N.dot(N.linalg.inv(self._working_frame),
+			N.vstack((glob, N.ones(glob.shape[1]))))
 
 		return ray_prms
 	

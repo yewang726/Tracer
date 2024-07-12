@@ -30,10 +30,12 @@ class TracerEngine():
 		
 		Arguments:
 		bundle - the RayBundle instance holding incoming rays.
-
+		surfaces - the list of surfaces in the main assembly
+		surf_relevancy - a binarry array of (nsurf, nrays) shape that states whether surface s needs to test intersection with ray r.
 		
 		Returns:
-		
+		earliest_surf - a nray length list with the indices of teh first surface intersected.
+		surf_relevancy - a binary array of (nsurf, nrays) shape that states whether surface s needs to test intersection with ray r.
 		"""
 		nrays = bundle.get_num_rays()
 		rays_mins = N.ones(nrays)*N.inf
@@ -61,54 +63,62 @@ class TracerEngine():
 				earliest_surf[rays_rel] = surf_num
 		return earliest_surf, surf_relevancy
 
-	def intersect_ray_accel(self, bundle, surfaces, objects, surf_relevancy):
+	def intersect_ray_accel_seq(self, bundle, surfaces, surf_relevancy):
 		"""
 		Finds the first surface intersected by each ray.
-		!!WORK IN PROGRESS!!
 		
 		Arguments:
 		bundle - the RayBundle instance holding incoming rays.
-		ownership - an array with the owning object instance for each ray in the
-			bundle, or -1 for no ownership.
+		surfaces - the list of surfaces in the main assembly
+		surf_relevancy - a lots of nsurf elements. In each s element of this main list, a list of nseqs elements describing sequential ray intersection tests. In each seq element of that list, the indices of the rays that shoudl be intersected.
 		
 		Returns:
-		stack - an s by r boolean array for s surfaces and r rays, stating
-			for each surface i=1..s if it is intersected by ray j=1..r
-		owned_rays - same size as stack, stating whether ray j was tested at all
-			by surface i
+		earliest_surf - a nray length list with the indices of teh first surface intersected.
+		owned_rays - a list of nsurf elements witth, in each element, the list fo indiced of the rays that went to be registered for intersection in the surface.		
+		
+		Esplaination:
+		We check, in order of intersections, all the rays that are relevant to each surface, as given in surfs-relevancy, thanks to the progressive traversal of the acceleration tree.
+		First we loop through all surfaces for first order intersection, then second order etc until no surface has rays left to simulate. After each order, ray mins are compard to find the first surface hit. 
+		If there is a hit, we prevent this ray form being registered for intersection in following iterations (this is where we should gain intersection time). 
 		"""
-		nsurfs = len(surfaces)
 		nrays = bundle.get_num_rays()
-		ret_shape = (nsurfs, nrays)
-		owned_rays = N.empty(ret_shape, dtype=N.bool)
 		rays_mins = N.ones(nrays)*N.inf
 		earliest_surf = -1*N.ones(nrays, dtype=int)
-		latest_order = N.amax(surf_relevancy, axis=0)
-		# Bounce rays off each object
-		for surf_num in range(len(surfaces)):
-			# Elements of owned_rays[surfnum] set to 1 if (rays dont own any surface or rays own the actual surface) and the surface is relevant to these rays.
-			owned_rays[surf_num] = (surf_relevancy[surf_num]>=0) & (surf_relevancy[surf_num]<=latest_order)
-			# If no ray is owned, skip the rest and build the stack
-			if not owned_rays[surf_num].any():
-				continue
-			# If some rays are not owned, the bundle inherits the owned_rays only
-			if not owned_rays[surf_num].all():
-				in_rays = bundle.inherit(owned_rays[surf_num])
-			   # ...Otherwise all the bundle goes into in_rays
-			else:
-				in_rays = bundle
+		rays_not_done = N.ones(nrays, dtype=bool)
+		hits = N.zeros(nrays, dtype=bool)
+		owned_rays = [[] for _ in range(len(surfaces))]
+		# length of intersection sequences per surface:
+		seqs = [len(s) for s in surf_relevancy]
 
-			# Fills the stack assigning rays to surfaces hit.
-			surf_stack = surfaces[surf_num].register_incoming(in_rays)
-			surf_stack[surf_stack==0.] = N.inf
-			earlier_hit = surf_stack < rays_mins[owned_rays[surf_num]]
-			if earlier_hit.any():
-				rays_mins[owned_rays[surf_num]] = N.where(earlier_hit, surf_stack, rays_mins[owned_rays[surf_num]])
-				earliest_surf[owned_rays[surf_num]] = N.where(earlier_hit, surf_num, earliest_surf[owned_rays[surf_num]])
-				# Remove relevancy of intersectiosn that would occur later in ray paths:
-				
-				latest_order[owned_rays[surf_num]] = N.where(earlier_hit, surf_relevancy[surf_num, owned_rays[surf_num]], latest_order[owned_rays[surf_num]])
-
+		# Maximum length
+		seqmax = N.amax(seqs)		
+		# Loop through sequence.
+		for seq in range(seqmax):
+			# Loop through surfaces
+			for surf_num, surf in enumerate(surfaces):
+				if seq<seqs[surf_num]:
+					rays_in_seq = [r for r in surf_relevancy[surf_num][seq] if rays_not_done[r]]
+					
+					if len(rays_in_seq)==0:
+						continue
+					else:
+						# the bundle inherits the relevant only
+						in_rays = bundle.inherit(rays_in_seq)
+						owned_rays[surf_num].extend(rays_in_seq)
+						
+						# Bounce rays off each object
+						# Fills the stack assigning rays to surfaces hit.
+						surf_stack = surf.register_incoming(in_rays) # find intersections using surface geometry manager
+						surf_stack[surf_stack==0.] = N.inf # if intersection distance is 0, set this as not an intersection
+						earlier_hit = surf_stack < rays_mins[rays_in_seq] # compare intersection distance with this surface with rays_mins relevant for this surface to find if the currently detected hit is the earliest.
+						if earlier_hit.any():
+							hit_idx = [r for i,r in enumerate(rays_in_seq) if earlier_hit[i]]
+							rays_mins[hit_idx] = surf_stack[earlier_hit]
+							earliest_surf[hit_idx] = surf_num
+							hits[hit_idx] = True
+			# With all surfaces done for this sequence, update the list of rays that are done.
+			rays_not_done[hits] = False
+			hits[:] = False
 		return earliest_surf, owned_rays
 
 	def ray_tracer(self, bundle, reps=100, min_energy=1e-10, tree=True, accel=False, Kd_Tree=None, **kwargs):
@@ -183,13 +193,13 @@ class TracerEngine():
 		for i in range(reps):
 			t0 = time.time()
 			if accel:
-				if accel == 'ordered': # not bringing any advantage.
-					any_inter, surfs_relevancy = self.Kd_Tree.traversal(bund, ordered=True)
+				if accel == 'lightweight':
+					any_inter, surfs_relevancy = self.Kd_Tree.traversal(bund, lightweight=True)
 					t0 = time.time()
 					if any_inter:
-						front_surf, owned_rays = self.intersect_ray_accel(bund, surfaces, objects, surfs_relevancy)
+						front_surf, owned_rays = self.intersect_ray_accel_seq(bund, surfaces, surfs_relevancy)
 				else:
-					any_inter, surfs_relevancy = self.Kd_Tree.traversal(bund, ordered=False)
+					any_inter, surfs_relevancy = self.Kd_Tree.traversal(bund)
 					t0 = time.time()
 					if any_inter:
 						front_surf, owned_rays = self.intersect_ray(bund, surfaces, surfs_relevancy)
@@ -209,11 +219,18 @@ class TracerEngine():
 				if not any(intersections):
 					surfaces[surf_idx].done()
 					continue
+					
+				if accel == 'lightweight': # as we do sequential ray-trace, we need to give the full intersected bundle back to the surface to be able to select the right rays and calculate the outgoing rays. Ideally this is done at the surface level automatically in the future...
+					surfbun = bund.inherit(selector=owned_rays[surf_idx])
+					surfaces[surf_idx].update_current_bundle(surfbun)
 				surfaces[surf_idx].select_rays(N.nonzero(intersections)[0])
 				new_outg = surfaces[surf_idx].get_outgoing()
 				
 				# Fix parent indexing to refer to the full original bundle:
-				parents = N.nonzero(owned_rays[surf_idx])[0][new_outg.get_parents()]
+				if accel == 'lightweight':
+					parents = N.array(owned_rays[surf_idx])[new_outg.get_parents()]
+				else:
+					parents = N.nonzero(owned_rays[surf_idx])[0][new_outg.get_parents()]
 				new_outg.set_parents(parents)
 
 				# Add to record before culling low_energy rays
@@ -262,7 +279,6 @@ class TracerEngine():
 
 			t1 = time.time()-t0
 			if not accel:
-				ray_ownership = N.hstack(out_ray_own)
 				surfs_relevancy = N.hstack(new_surfs_relevancy)
 			else:
 				logging.log(self.loglevel, f'trace time {t1} s')

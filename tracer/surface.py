@@ -64,7 +64,7 @@ class Surface(HasFrame):
 		Returns
 		A 1D array with the parametric position of intersection along each of
 			the rays. Rays that missed the surface return +infinity.
-		"""	  
+		"""	
 		self._current_bundle = ray_bundle
 		return self._geom.find_intersections(self._temp_frame, ray_bundle)
 	
@@ -91,6 +91,14 @@ class Surface(HasFrame):
 			and directions according to optics laws.
 		"""
 		return self._opt(self._geom, self._current_bundle, self._selected)
+		
+	def update_current_bundle(self, bundle):
+		'''
+		When ray-tracing is performed sequentially to cull potential iintersection 
+		tests, the surface registers the full bundle in sequences. To include the 
+		consolidated ray bndle, the current bundle is rebased with this function.
+		'''
+		self._current_bundle = bundle
 	
 	def done(self):
 		"""

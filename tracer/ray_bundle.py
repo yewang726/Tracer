@@ -151,7 +151,7 @@ class RayBundle:
 		added - a RayBundle instance to concatenate with this one.
 		"""
 		newbund = RayBundle()
-		
+
 		for attr in self._check_attr:
 			if hasattr(self, attr) and hasattr(added, attr):
 				# Create the property if its not in the base set:
@@ -162,7 +162,6 @@ class RayBundle:
 				newbund.__dict__['set' + attr](N.hstack((
 					self.__dict__['get' + attr](),
 					added.__dict__['get' + attr]() )) )
-		
 		return newbund
 
 	@staticmethod

@@ -17,7 +17,7 @@ class KdTree(object):
 	'''
 	Acceleration tree stucture class containing building methods and traversal methods.
 	'''
-	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, loglevel=logging.DEBUG, debug=False, fast=False, t_trav=1., t_isec=500., empty_bonus=0.2, split_threshold=None):
+	def __init__(self, assembly, max_depth=N.inf, min_leaf=1, loglevel=logging.DEBUG, debug=False, fast=False, t_trav=1., t_isec=1000., empty_bonus=0.2, split_threshold=None):
 		self.loglevel = loglevel
 		self.nodes = []
 		
@@ -44,6 +44,8 @@ class KdTree(object):
 		t0 = time.time()
 		boundaries = [o.get_boundaries() for o in self.objects]
 		bounds_per_object = N.array([len(b) for b in boundaries]) # boundaries per object
+		if (bounds_per_object == 0).all():
+			raise Exception('No boundary defined in the assembly, please revert to non-accelerated ray-tracing')
 		total_bounds = N.sum(bounds_per_object) # total number of boundaries
 
 		surf_per_object = N.array([len(o.get_surfaces()) for o in self.objects]) # number of surfaces per object
@@ -104,7 +106,7 @@ class KdTree(object):
 			else:
 				# find/determine split
 				bounds_in_node = bounds[:, N.tile(in_node,2)]
-				split = self.determine_split(minpoint, maxpoint, minpoints[:,in_node], maxpoints[:,in_node], bounds_in_node, n_bounds=n_bounds, t_trav=self.t_trav, t_isec=self.t_isec, empty_bonus=self.empty_bonus, split_threshold=self.split_threshold)
+				split = self.determine_split(minpoint, maxpoint, minpoints[:,in_node], maxpoints[:,in_node], bounds_in_node, n_bounds=n_bounds, t_trav=self.t_trav, t_isec=self.t_isec, empty_bonus=self.empty_bonus)
 				if split[0] == 3:
 					# make parent node a leaf:
 					self.nodes[node_idx].flag = 3
@@ -133,18 +135,17 @@ class KdTree(object):
 
 		# remove unused node data
 		self.nodes = self.nodes[:node_idx]
-
 		if self.debug:
 			self.nodes_info = nodes_info[:node_idx]
 
 		t1 = time.time()-t0
-		logging.debug(f'build_time: {t1}s')
-		logging.debug(f'maximum level{node_level}')
+		logging.log(self.loglevel, f'build_time: {t1}s')
+		logging.log(self.loglevel, f'maximum level{node_level}')
 		self.build_time = t1
-		logging.debug('Kd-Tree built')
+		logging.log(self.loglevel, 'Kd-Tree built')
 
 
-	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., empty_bonus=0.2, split_threshold=None):
+	def determine_split(self, minpoint_parent, maxpoint_parent, minpoints, maxpoints, bounds, n_bounds=None, t_trav=1., t_isec=100., empty_bonus=0.2):
 		'''
 		Based on:
 		https://pbr-book.org/3ed-2018/Primitives_and_Intersection_Acceleration/Kd-Tree_Accelerator
@@ -198,161 +199,42 @@ class KdTree(object):
 					i+=1
 
 				if SAH_res is not None:
-					# Adjust the split based on object count
-					if split_threshold is None:
-						return int(a), bounds_axis[SAH_res]
-					adjusted_split = self.adjust_split(bounds_axis[SAH_res], minpoint_parent, maxpoint_parent, minpoints, maxpoints, a, split_threshold)
 					return int(a), bounds_axis[SAH_res]
 		return 3, Ns
-
-
-	def adjust_split(self, split, minpoint, maxpoint, minpoints, maxpoints, axis, threshold=0.1):
-		"""
-		Adjust the split position based on the count of objects within each node
-		to achieve an approximately equal count on both sides, if the difference exceeds the threshold.
-		"""
-		left_count = np.sum(maxpoints[axis] < split)
-		right_count = np.sum(minpoints[axis] > split)
-		total_count = left_count + right_count
-
-		# If total count is zero, no adjustment is needed
-		if total_count == 0:
-			return split
-
-		# Calculate the proportion of objects on each side
-		left_proportion = left_count / total_count
-		right_proportion = right_count / total_count
-
-		# If the difference in proportions is within the threshold, no adjustment is needed
-		if abs(left_proportion - right_proportion) <= threshold:
-			return split
-
-		# Calculate the desired number of objects on each side
-		desired_count = total_count / 2
-
-		# Iteratively adjust the split position to balance the counts
-		adjustment_step = (maxpoint[axis] - minpoint[axis]) * 0.01  # Step size for adjustment
-
-		while abs(left_count - right_count) > (threshold * total_count):  # Continue until the counts are approximately equal
-			if left_count > desired_count:
-				split += adjustment_step
-			else:
-				split -= adjustment_step
-			
-			left_count = np.sum(maxpoints[axis] < split)
-			right_count = np.sum(minpoints[axis] > split)
-
-		return split
-
 
 	def add_node(self, n, nodes_info):
 		for i in range(n):
 			self.nodes.append(Node())
 			nodes_info.append(NodeInfo())
 		return nodes_info			
-		
 
-	def direct_traversal(self, bundle, surfaces):
-		'''
-		!NOT WORKING!
-		This is an attempt to introduce sequential intersections in the traversal instead of outside as is typically done in tracer. With this implementation we should theoretically be able to save some intersections.
-		Close to pure PBRT, with some numpy indexing to attempt to benefit from array computations and storage advantage.
-		'''
-		t0 = time.time()
 
-		poss, dirs = bundle.get_vertices(), bundle.get_directions()
-		inv_dirs = 1./dirs
-
-		bounds = N.array([self.minpoint, self.maxpoint])
-		inters, t_mins, t_maxs = self.intersect_bounds(poss, dirs, inv_dirs, bounds)
-
-		earliest_surf = -1*N.ones(poss.shape[1], dtype=int)
-		owned_rays = N.empty((len(surfaces), poss.shape[1]), dtype=bool)
-
-		n_inters = len(inters)
-
-		any_inter = False
-
-		if inters.any():
-			# for rays that do intersect, go down the tree (or up?):
-			for r in range(n_inters):
-				if inters[r] == False:
-					continue
-				t_min, t_max = t_mins[r], t_maxs[r]
-				todopos = 0
-				to_do = [[0, t_min, t_max] for _ in range(64)]  # factor 4 faster than for-loop
-				
-				node = self.nodes[to_do[todopos][0]]
-				while True:
-					if (t_maxs[r] < t_min):
-						break
-					# Is node a leaf?
-					if node.flag != 3: #interior
-						# is ray intersecting split? 
-						split_axis, split_pos = node.flag, node.split
-						t_plane = (split_pos-poss[split_axis,r]) * inv_dirs[split_axis,r]
-
-						# Get node children and sort them:
-						c1 = node.child
-						c2 = c1 + 1
-						belowfirst = (poss[split_axis,r] < split_pos) or (poss[split_axis,r] == split_pos and dirs[split_axis,r]<=0.)
-
-						if ~belowfirst:
-							c1, c2 = c2, c1
-
-						if (t_plane>t_max) or (t_plane<=0.):
-							node = self.nodes[c1]
-						elif (t_plane<t_min):
-							node = self.nodes[c2]
-						else:
-							to_do[todopos][0] = c2
-							to_do[todopos][1] = t_plane
-							to_do[todopos][2] = t_max
-							todopos += 1
-							node = self.nodes[c1]
-							t_max = t_plane
-					else: # leaf
-						in_rays = bundle.inherit([r])
-						for s in node.surfaces_idxs:
-							surf_stack = surfaces[s].register_incoming(in_rays)[0]
-							if surf_stack<t_max:
-								t_maxs[r] = surf_stack
-								earliest_surf[r] = s
-							owned_rays[s,r] = True
-						any_inter = True
-
-						if todopos>0:
-							todopos -= 1
-							node = self.nodes[to_do[todopos][0]]
-							t_min = to_do[todopos][1]
-							t_max = to_do[todopos][2]
-						else:
-							break
-		t1 = time.time()-t0
-		logging.debug(f'traversal_time: {t1}s')
-		return earliest_surf, owned_rays
-
-	def traversal(self, bundle, ordered=False):
+	def traversal(self, bundle, lightweight=False):
 		'''
 		Close to pure PBRT but the ray bundles have to test all potential surfaces in the relevant trea leaves simulatneously (ie. it is not checking the closest box first. this is due to the Tracer way of doing ray-tracing and is not modified yet.
-		ordered is an attemps to replace the binary stack that determins the intersection-tested surfaces with a stack of integers that indicate which surfaces to test first and avoid doing too many tests. It does not seem to provide much benefits so far...
+		'Lighweight; is an attemps to replace the binary stack that determines the intersection-tested surfaces with a data structure based on lists of integers that indicate for each surface which bunch of rays to test first and see if any intersection is obteined before scheduling the next bundle. It does not seem to provide much benefits so far...
 		'''
 		t0 = time.time()
 
+		nrays = bundle.get_num_rays()
 		poss, dirs = bundle.get_vertices(), bundle.get_directions()
 		inv_dirs = 1./dirs
 
 		bounds = N.array([self.minpoint, self.maxpoint])
 		inters, t_mins, t_maxs = self.intersect_bounds(poss, dirs, inv_dirs, bounds)
-		n_inters = len(inters)
-		any_inter = False
-
-		if ordered:
-			surfaces_relevancy = -1*N.ones((self.n_surfs, bundle.get_num_rays()), dtype=int)
-		else:
-			surfaces_relevancy = N.zeros((self.n_surfs, bundle.get_num_rays()), dtype=bool)
 
 		if inters.any():
+			n_inters = len(inters)
+			any_inter = False
+			if lightweight:
+				#surfaces_relevancy = [[self.always_relevant] for _ in range(nrays)]
+				surfaces_relevancy = [[[]] for _ in range(self.n_surfs)]
+				ray_orders = N.zeros(nrays, dtype=int)
+				for s in self.always_relevant:
+					surface_relevancy[s] += [r for r in range(nrays)]
+			else:
+				surfaces_relevancy = N.zeros((self.n_surfs, nrays), dtype=bool)
+				surfaces_relevancy[self.always_relevant] = True
 			# for rays that do intersect, go down the tree (or up?):
 			for r in range(n_inters):
 				if inters[r] == False:
@@ -361,8 +243,7 @@ class KdTree(object):
 				todopos = 0
 				to_do = [[0, t_min, t_max] for _ in range(16)]
 				node = self.nodes[to_do[todopos][0]]
-				if ordered:
-					order = 0
+
 				while True:
 					if (t_maxs[r] < t_min):
 						break
@@ -395,9 +276,13 @@ class KdTree(object):
 								to_do += [[0, t_min, t_max] for _ in range(len(to_do))]
 								logging.log(self.loglevel, f"Expanding todo list to {len(to_do)} elements")
 					else: # leaf
-						if ordered:
-							surfaces_relevancy[node.surfaces_idxs.tolist(),r] = order
-							order += 1
+						if lightweight:
+							for s in node.surfaces_idxs.tolist():
+								while len(surfaces_relevancy[s])<=ray_orders[r]:
+									surfaces_relevancy[s].append([])
+								if r not in surfaces_relevancy[s][ray_orders[r]]: # here we remove double accounting that can be caused by the inclusoin of both the minimum and maximum of the boundaries for safety.
+									surfaces_relevancy[s][ray_orders[r]] += [r]
+							ray_orders[r] += 1
 						else:
 							surfaces_relevancy[node.surfaces_idxs.tolist(),r] = True
 
@@ -411,17 +296,18 @@ class KdTree(object):
 						else:
 							break
 					
+			
+			# Remove rays that are on later batches for each surface if they are tested earlier on that surface.
+			if lightweight:
+				for s in surfaces_relevancy:
+					for i,o in enumerate(s[::-1]):
+						previously_tested_rays = [r for o in s[:-(i+1)] for r in o]
+						s[-(i+1)] = [r for r in o if r not in previously_tested_rays]
 
-		# If some objects had no bounds, we malke them permanently relevant for all rays.
-		if ordered:
-			surfaces_relevancy[self.always_relevant,:] = 0
-			any_inter = True
-		else:
-			surfaces_relevancy[self.always_relevant,:] = True
 			any_inter = True
 
 		t1 = time.time()-t0
-		logging.debug(f'traversal_time: {t1}s')
+		logging.log(self.loglevel, f'traversal_time: {t1}s')
 		return any_inter, surfaces_relevancy
 
 	def intersect_bounds(self, poss, dirs, inv_dirs, bounds):
@@ -456,7 +342,7 @@ class Node(object):
 	pass
 
 
-class NodeInfo():
+class NodeInfo(object):
 	def __init__(self, minpoint=None, maxpoint=None, level=None):
 		"""
 		NodeInfo instances are used to keep track of the information when building the tree.
