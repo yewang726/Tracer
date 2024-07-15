@@ -160,7 +160,7 @@ class KdTree(object):
 		diag = maxpoint_parent-minpoint_parent
 		sorted_axes = N.argsort(diag, axis=0)[::-1]
 		S_inv = 1./(diag[0]*diag[1]+diag[1]*diag[2]+diag[2]*diag[0])
-		basecost = t_trav-Ns*t_isec
+		basecost = t_trav+Ns*t_isec
 
 		for a in sorted_axes:
 			bounds_axis = bounds[a]
