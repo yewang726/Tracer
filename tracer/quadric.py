@@ -62,50 +62,53 @@ class QuadricGM(GeometryManager):
         any_inters = delta >= 1e-6
         num_inters = any_inters.sum()
 
-        if num_inters == 0:
-            self._vertices = vertices
-            self._params = params #
-            return params      
+        if num_inters != 0:
+            A = A[any_inters]
+            B = B[any_inters]
+            C = C[any_inters]        
+            
+            delta = N.sqrt(B**2. - 4.*A*C)
 
-        A = A[any_inters]
-        B = B[any_inters]
-        C = C[any_inters]        
-        
-        delta = N.sqrt(B**2. - 4.*A*C)
+            hits = N.empty((2,num_inters))
+            hits.fill(N.nan)
 
-        hits = N.empty((2,num_inters))
-        hits.fill(N.nan)
+            # Identify linear equations
+            is_linear = A == 0
+            # Identify B = 0 cases
+            is_Bnull = B == 0
 
-        # Identify linear equations
-        is_linear = A == 0
-        # Identify B = 0 cases
-        is_Bnull = B == 0
+            # Solve linear intersections        
+            hits[:,is_linear & ~is_Bnull] = N.tile(-C[is_linear & ~is_Bnull]/B[is_linear & ~is_Bnull], (2,1))     
+            # Solve B = 0 cases (give bad information on N.sign(0))
+            hits[0,~is_linear & is_Bnull] = -N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
+            hits[1,~is_linear & is_Bnull] = N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
+            # Solve quadric regular intersections
+            q = -0.5*(B+N.sign(B)*delta)
+            hits[0,~is_linear & ~is_Bnull] = q[~is_linear & ~is_Bnull]/A[~is_linear & ~is_Bnull]
+            hits[1,~is_linear & ~is_Bnull] = C[~is_linear & ~is_Bnull]/q[~is_linear & ~is_Bnull]
+           
+            # Get intersection coordinates using rays parameters
+            inters_coords = v[:,any_inters] + d[:,any_inters]*hits.reshape(2,1,-1)     
 
-        # Solve linear intersections        
-        hits[:,is_linear & ~is_Bnull] = N.tile(-C[is_linear & ~is_Bnull]/B[is_linear & ~is_Bnull], (2,1))     
-        # Solve B = 0 cases (give bad information on N.sign(0))
-        hits[0,~is_linear & is_Bnull] = -N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
-        hits[1,~is_linear & is_Bnull] = N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
-        # Solve quadric regular intersections
-        q = -0.5*(B+N.sign(B)*delta)
-        hits[0,~is_linear & ~is_Bnull] = q[~is_linear & ~is_Bnull]/A[~is_linear & ~is_Bnull]
-        hits[1,~is_linear & ~is_Bnull] = C[~is_linear & ~is_Bnull]/q[~is_linear & ~is_Bnull]
-       
-        # Get intersection coordinates using rays parameters
-        inters_coords = v[:,any_inters] + d[:,any_inters]*hits.reshape(2,1,-1)     
-
-        # Quadrics can have two intersections. Here we allow child classes
-        # to choose based on own method:
-        select = self._select_coords(inters_coords, hits)
-        not_missed = ~N.isnan(select)
-        any_inters[any_inters] = not_missed
-        select = N.array(select[not_missed], dtype=N.int_)
-        params[any_inters] = N.choose(select, hits[:,not_missed])
-        vertices[:,any_inters] = N.choose(select, inters_coords[...,not_missed])
+            # Quadrics can have two intersections. Here we allow child classes
+            # to choose based on own method:
+            select = self._select_coords(inters_coords, hits)
+            not_missed = ~N.isnan(select)
+            any_inters[any_inters] = not_missed
+            select = N.array(select[not_missed], dtype=N.int_)
+            params[any_inters] = N.choose(select, hits[:,not_missed])
+            vertices[:,any_inters] = N.choose(select, inters_coords[...,not_missed])
         
         # Storage for later reference:
-        self._vertices = vertices
-        self._params = params
+        if hasattr(self, '_vertices'):
+            self._vertices = N.concatenate([self._vertices, vertices], axis=-1)
+        else:
+            self._vertices = vertices
+
+        if hasattr(self, '_params'):
+            self._params = N.hstack([self._params, params])
+        else:
+            self._params = params
   
         return params
     
