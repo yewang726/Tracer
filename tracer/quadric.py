@@ -50,19 +50,20 @@ class QuadricGM(GeometryManager):
         n = ray_bundle.get_num_rays()
         c = self._working_frame[:3,3]
   
-        params = N.empty(n)
-        params.fill(N.inf)
-        vertices = N.empty((3,n))
-        
-        # Gets the relevant A, B, C from whichever quadric surface, see [1]
+         # Gets the relevant A, B, C from whichever quadric surface, see [1]
         A, B, C = self.get_ABC(ray_bundle)
 
         # Identify quadric intersections        
         delta = B**2. - 4.*A*C
         any_inters = delta >= 1e-6
         num_inters = any_inters.sum()
+        
+        params = N.empty(n)
+        params.fill(N.inf)
+        vertices = N.empty((3,n))
 
         if num_inters != 0:
+        
             A = A[any_inters]
             B = B[any_inters]
             C = C[any_inters]        
@@ -100,11 +101,10 @@ class QuadricGM(GeometryManager):
             vertices[:,any_inters] = N.choose(select, inters_coords[...,not_missed])
         
         # Storage for later reference:
-        if hasattr(self, '_vertices'):
-            self._vertices = N.concatenate([self._vertices, vertices], axis=-1)
+         if hasattr(self, '_global'):
+            self._global = N.concatenate([self._global, vertices], axis=-1)
         else:
-            self._vertices = vertices
-
+            self._global = vertices
         if hasattr(self, '_params'):
             self._params = N.hstack([self._params, params])
         else:
@@ -154,19 +154,15 @@ class QuadricGM(GeometryManager):
             register_incoming()
         """
         self._idxs = idxs
-        self._vertices = self._vertices[:,idxs].copy()
-        
-        # Normals to the surface at the intersection points are calculated by
-        # the subclass' _normals method.
-        self._norm = self._normals(self._vertices.T,
-                self._working_bundle.get_directions()[:,idxs].T)
+        self._global = self._global[:,self._idxs]
     
     def get_normals(self):
         """
         Report the normal to the surface at the hit point of selected rays in
         the working bundle.
         """
-        return self._norm
+        norm = self._normals(self._global.T, self._working_bundle.get_directions()[:,idxs].T)
+        return norm
     
     def get_intersection_points_global(self):
         """
@@ -175,17 +171,16 @@ class QuadricGM(GeometryManager):
         Returns:
         A 3-by-n array for 3 spatial coordinates and n rays selected.
         """
-        return self._vertices
+        return self._global
     
     def done(self):
         """
         Discard internal data structures. This should be called after all
         information on the latest bundle's results have been extracted already.
         """
-        if hasattr(self, '_vertices'):
-            del self._vertices
+        if hasattr(self, '_global'):
+            del self._global
         if hasattr(self, '_idxs'):
-            del self._norm
             del self._idxs
         GeometryManager.done(self)
 

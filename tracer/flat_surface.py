@@ -79,10 +79,7 @@ class FlatGeometryManager(GeometryManager):
 		del self._params
 		
 		# Global coordinates on the surface:
-		if hasattr(self, '_global'):
-			self._global = N.concatenate([self._global, v + p[None,:]*d], axis=-1)
-		else:
-			self._global = v + p[None,:]*d
+		self._global = v + p[None,:]*d
 	
 	def get_normals(self):
 		"""
@@ -150,15 +147,12 @@ class FiniteFlatGM(FlatGeometryManager):
 		del self._params
 		
 		# Global coordinates on the surface:
-		oldsettings = N.seterr(invalid='ignore')
 		glob = v + p[None,:]*d
-
 		if hasattr(self, '_global'):
 			self._global = N.concatenate([self._global, glob], axis=-1)
 		else:
 			self._global = glob
-			
-		N.seterr(**oldsettings)
+
 		# above we ignore invalid values. Those rays can't be selected anyway.
 		# Local should be deleted by children in their find_intersections.
 		

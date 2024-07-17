@@ -18,7 +18,7 @@ Example of usage of BoundaryBox with a scene for 3D acceleration
 '''
 logging.basicConfig(level=logging.INFO)
 # n**2 rectangular plates on a flat lambertian ground
-n = 20
+n = 2
 t0 = time.time()
 # List of objects
 objects = []
@@ -71,6 +71,8 @@ def lightweight():
 	print ('ACCEL', time.time()-t0,'s', ener, 'W')
 
 cProfile.run('lightweight()', sort='time')
+viewer = Renderer(engine)
+viewer.show_rays(max_rays=100)
 
 assembly.reset_all_optics()
 def true():
