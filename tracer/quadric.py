@@ -156,7 +156,7 @@ class QuadricGM(GeometryManager):
         self._idxs = idxs
         self._global = self._global[:,self._idxs]
     
-    def get_normals(self):
+    def get_normals(self, idxs):
         """
         Report the normal to the surface at the hit point of selected rays in
         the working bundle.
