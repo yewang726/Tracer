@@ -101,7 +101,7 @@ class QuadricGM(GeometryManager):
             vertices[:,any_inters] = N.choose(select, inters_coords[...,not_missed])
         
         # Storage for later reference:
-         if hasattr(self, '_global'):
+        if hasattr(self, '_global'):
             self._global = N.concatenate([self._global, vertices], axis=-1)
         else:
             self._global = vertices
