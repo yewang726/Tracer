@@ -11,7 +11,7 @@ from numpy import random, linalg as LA
 import numpy as N
 from tracer.ray_bundle import RayBundle, concatenate_rays
 from tracer.spatial_geometry import *
-from ray_trace_utils.vector_manipulations import rotate_z_to_normals
+from ray_trace_utils.vector_manipulations import rotate_z_to_normal
 
 def single_ray_source(position, direction, flux=None):
 	'''
@@ -33,15 +33,15 @@ def single_ray_source(position, direction, flux=None):
 	singray.set_energy(flux*N.ones(1))
 	return singray
 
-def isotropic_directions_sampling(num_rays, ang_range, normals=None):
+def isotropic_directions_sampling(num_rays, ang_range, normal=None):
 	# Diffuse divergence from +Z:
 	# development based on eq. 2.12  from [1]
-	xi1 = random.uniform(high=2.*N.pi, size=num_rays) # Phi
+	xi1 = random.uniform(low=0., high=2.*N.pi, size=num_rays) # Phi
 	xi2 = random.uniform(size=num_rays) # Rtheta
 	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
 	dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
 	if normals is not None:
-		dirs = rotate_z_to_normals(dirs, normals)
+		dirs = rotate_z_to_normal(dirs, normal)
 	return dirs
 
 def pillbox_sunshape_directions(num_rays, ang_range):

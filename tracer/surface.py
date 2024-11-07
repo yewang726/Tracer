@@ -29,6 +29,7 @@ class Surface(HasFrame):
 		self._geom = geometry
 		self._opt = optics
 		self._fixed_color = fixed_color
+		self._transparency = 0
 		if fixed_color:
 			self._fixed_color = fixed_color[:3]	
 			if len(fixed_color) == 4:

@@ -1,12 +1,12 @@
 import numpy as N
 
 class Estimator(object):
-	def __init__(self):
+	def __init__(self, n_sigmas=3.):
 		self.value = 0.
 		self.Qsum = 0.
 		self.p = 0.
 		self.CI = N.inf
-		self.precision = N.inf
+		self.n_sigmas = n_sigmas
 
 	def update(self, value, weight=1.):
 		self.weight = weight
@@ -16,8 +16,9 @@ class Estimator(object):
 		self.p += self.weight
 
 	def get_CI(self):
+		# Returns the conficence interval value in relative terms ie. dicvided by the current estimation value.
 		stdev = self.get_stdev()
-		CI = N.array(3.*stdev/self.value)
+		CI = N.array(self.n_sigmas*stdev/self.value)
 		CI[stdev==0.] = 0.
 		return CI
 

@@ -6,13 +6,19 @@ def get_angles(v1, v2, signed=False):
 	v1 - (3,n)
 	v2 - (3)
 	'''
+
+	if len(v1.shape)<=1:
+		return get_angle(v1, v2, signed)
+
 	proj = N.dot(v1.T, v2)
 	v2s = N.tile(v2, (v1.shape[1],1)).T
 	costheta = proj.T/(N.sqrt(N.sum(v1**2, axis=0))*N.sqrt(N.sum(v2s**2, axis=0)))
+	angs = N.arccos(costheta)
 	if signed == True:
-		angs = -N.sign(proj).T*N.arccos(costheta)
-	else:
-		angs = N.arccos(costheta)
+		sign = N.sign(proj)
+		sign[sign==0] = 1.
+		angs = sign*angs
+
 	return angs
 	
 def get_angle(v1, v2, signed=False):
@@ -22,21 +28,43 @@ def get_angle(v1, v2, signed=False):
 	'''
 	proj = N.dot(v1.T, v2)
 	costheta = proj/(N.sqrt(N.sum(v1**2))*N.sqrt(N.sum(v2**2)))
+	angs = N.arccos(costheta)
 	if signed == True:
-		angs = -N.sign(proj)*N.arccos(costheta)
-	else:
-		angs = N.arccos(costheta)
+		sign = N.sign(proj)
+		if sign == 0.:
+			sign = 1.
+		angs = sign*angs
+		
 	return angs
 	
-def rotate_z_to_normals(directions, normals):
-	zs = N.zeros((directions.shape))
+def axes_and_angles_between(vecs, normal):
+	'''
+	Determine the plane normal betwene each vecs and respective normals, and estimates the angle to go from vecs to normals while rotating around the normal.
+	'''
+	if len(vecs.shape)>1:
+		normals = N.tile(normal, (vecs.shape[1],1)).T
+		axes = get_plane_normals(vecs.T, normals.T) # axis of rotation ie normal of the plane formed by both vectors
+		angles = get_angles(vecs, normal, signed=False) # angle between +z in directiosn referential and normals on the plane defined earlier
+	else:
+		axes = get_plane_normals(vecs.T, normal.T) # axis of rotation ie normal of the plane formed by both vectors
+		angles = get_angle(vecs, normal, signed=False) # angle between +z in directiosn referential and normals on the plane defined earlier
+
+	return axes, angles
+	
+def rotate_z_to_normal(vecs, normal):
+	'''
+	Rotate vecs so that they consider normals as their +z. The rotation matrix is established so that it is the minimal rotation along the plane formed between each direction and their respective normal unlike the rotate_to_z alternative in the spatial_geometry module.
+	'''
+	zs = N.zeros((vecs.shape))
 	zs[2] = 1.
-	axes = get_plane_normals(zs.T, normals.T)
-	angles = get_angles(normals, zs[:,0], signed=True)
-	for i, d in enumerate(directions.T):
-		rot = general_axis_rotation(axes[:,i], angles[i])
-		directions[:,i] = N.dot(rot, d)
-	return directions
+	axes, angles = axes_and_angles_between(zs, normal)
+	# rotate +z to normals
+	for i, d in enumerate(vecs.T):
+		if angles[i] != 0.:
+			rot = general_axis_rotation(axes[:,i], angles[i])
+			vecs[:,i] = N.dot(rot, d)
+
+	return vecs
 
 def project_on_plane(v1, normal):
 	# projects v1 on the plane defined by the normal

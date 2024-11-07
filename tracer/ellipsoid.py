@@ -68,7 +68,7 @@ class EllipsoidGM(Ellipsoid):
 		xlim, ylim, zlim - lists of minimum and maximum value used to truncate the ellipsoid along specific axes. intersectiosn beyond the limots are ignored.	
 		'''
 		Ellipsoid.__init__(self, a, b, c)
-		if (N.array([xlim, ylim, zlim]) == None).any():
+		if (N.hstack([xlim, ylim, zlim]) == None).any():
 			self.xlim, self.ylim, self.zlim = xlim, ylim, zlim
 			self.truncated = True
 		else:

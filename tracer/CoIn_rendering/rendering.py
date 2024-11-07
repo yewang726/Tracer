@@ -163,7 +163,7 @@ Reference:
 				ev = end_rays.get_vertices()
 				parents = end_rays.get_parents()
 				if level==0:
-					shown = N.arange(max_rays)
+					shown = N.random.choice(len(se), size=max_rays, replace=False)
 					parents_of_shown = N.in1d(parents, shown)
 				else:
 					shown = N.nonzero(parents_of_shown)[0]

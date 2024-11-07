@@ -130,7 +130,7 @@ class QuadricGM(GeometryManager):
         Returns:
         The index of the selected intersection, or None if neither will do.
         """
-        is_positive = prm > 0.
+        is_positive = prm >= 1e-6
         select = N.empty(prm.shape[1])
         select.fill(N.nan)
 

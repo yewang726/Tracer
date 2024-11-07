@@ -250,31 +250,49 @@ def pw_linear_importance_sampling(dist, ns):
 	
 def disk_sampling(r_ext, ns, normal_up=True):
 	ths = N.random.uniform(size=ns)*2.*N.pi
-	rs = N.sqrt(N.random.uniform(ns)*r_ext**2.)
+	rs = N.sqrt(N.random.uniform(size=ns))*r_ext
 	positions = N.vstack([rs*N.cos(ths), rs*N.sin(ths), N.zeros(ns)])
 	normals = N.vstack([N.zeros(ns), N.zeros(ns), N.ones(ns)])
 	if normal_up == False:
 		normals = -normals
 	return positions, normals
 	
-def cylinder_sampling(r_ext, h, ns, normal_in=True):
-	ths = N.random.uniform(size=ns)*2.*N.pi
-	zs = N.random.uniform(size=ns)*h
-	positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])
-	normals = -N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
-	if normal_in == False:
-		normals = -normals
-	return positions, normals
+def cylinder_sampling(r_ext, h, ns, normal_in=False, volume=False):
+	'''
+	Uniformly samples a cylinder surface or volume if volume argument is True
+	Surface sampling also returns surface normal vetcors at the sampled points locations.
+	'''
+	zs = N.random.uniform(size=ns)*h-h/2.
+	if volume == False:
+		ths = N.random.uniform(size=ns)*2.*N.pi
+		positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])
+		normals = N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
+		if normal_in == False:
+			normals = -normals
+		return positions, normals
+	else:
+		positions, normdisk = disk_sampling(r_ext, ns)
+		positions[2] = zs
+		return positions
 	
-def sphere_sampling(r_ext, ns, normal_in=True):
+def sphere_sampling(r_ext, ns, normal_in=False, volume=False):
+	'''
+	Uniformly samples a sphere surface or volume if volume argument is True
+	Surface sampling also returns surface normal vetcors at the sampled points locations.
+	'''
 	phis = N.random.uniform(size=ns)*2.*N.pi
 	cosths = N.random.uniform(low=-1., high=1., size=ns) # cosine of polar angle uniformly distributed
 	sinths = N.sqrt(1.-cosths**2)
 	normals = N.vstack([sinths*N.cos(phis), sinths*N.sin(phis), cosths])
-	positions = r_ext*normals
-	if normal_in == True:
-		normals = -normals
-	return positions, normals
+	if volume == False:
+		positions = r_ext*normals
+		if normal_in == True:
+			normals = -normals
+		return positions, normals
+	else:
+		r_s = r_ext*N.cuberoot(N.random.uniform(size=ns))
+		positions = r_s*normals
+		return positions
 	
 if __name__ == '__main__':
 	import matplotlib.pyplot as plt
