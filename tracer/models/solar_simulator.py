@@ -57,7 +57,7 @@ class SolarSimulator(Assembly):
 	'''
 	A solar simulator class. The solar simulator is composed of modules.		
 	'''
-	def __init__(self, modules_positions, modules_directions, modules_dicts, targets):
+	def __init__(self, modules_positions, modules_directions, modules_dicts, targets, homegenizer=None):
 		'''
 		Parameters:
 		- modules_positions: list (or array) of M length 3 (or shape(M,3)) vectors with each vector giving the position of the module first focus in 3D space.
@@ -68,7 +68,11 @@ class SolarSimulator(Assembly):
 		for i in range(len(modules_positions)):
 			self.modules.append(SolarSimulatorModule(**modules_dicts[i], first_focus_location=modules_positions[i], aiming_vector=modules_directions[i]))
 		self.targets = targets
-		Assembly.__init__(self, subassemblies=self.modules, objects=self.targets)
+		objects = targets
+		if homogenizer is not None:
+			self.homogenizer = homogenizer
+			objects += self.homogenizer
+		Assembly.__init__(self, subassemblies=self.modules, objects=objects)
 	
 	def simulate(self, nrays, part_load=1., lamp_mapper=False, rendering=False, ray_batch=1e4, save_dir= path[0]+'/Fluxmaps'):
 		'''
