@@ -62,6 +62,7 @@ Tested under Ubuntu 22 (running as WSL)
 
 4) Clone Tracer repository
 git clone https://github.com/casselineau/Tracer
+cd Tracer
 
 5) Install python requirements from Tracer
 5.1) Headless: pip install -r requirements_headless.txt
