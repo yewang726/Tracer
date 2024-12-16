@@ -14,10 +14,8 @@ class PW_linear_distribution(object):
 		self.CDF_def = N.add.accumulate(N.hstack([[0], self.integ]))/self.tot_integ
 
 	def find_slice(self, x):
-		comp = (N.round(x, decimals=7)>=N.vstack(self.xs)).T
-		locs = []
-		for c in comp:
-			locs.append(N.amax(N.arange(len(self.xs))[c]))
+		comp = (N.round(x, decimals=7)>N.vstack(self.xs)).T
+		locs = N.sum(comp, axis=1)-1
 		return locs
 
 	def __call__(self, x):
@@ -34,28 +32,26 @@ class PW_linear_distribution(object):
 		
 	def sample(self, ns):
 		x_samples = N.zeros(ns)
-
 		R = N.random.uniform(size=ns)
 		a = self.a/(2.*self.tot_integ)
 		b = self.PDF_def
 		slice_locs = N.logical_and((R >= N.vstack(self.CDF_def[:-1])), (R < N.vstack(self.CDF_def[1:])))
 		for i in range(len(self.CDF_def)-1):
 			if slice_locs[i].any():
-				if a[i] == 0 :
+				if a[i] == 0. :
 					x_samples[slice_locs[i]] = self.xs[i]+(R[slice_locs[i]]-self.CDF_def[i])/self.PDF_def[i]
 				else:
-					c = -(R[slice_locs[i]]-self.CDF_def[i])
+					c = (R[slice_locs[i]]-self.CDF_def[i])
 					D = b[i]**2.-4.*a[i]*c
 					x2 = (-b[i]+N.sqrt(D))/(2.*a[i])
 					x_samples[slice_locs[i]] = x2+self.xs[i]
-					
 		weights = self.tot_integ/self(x_samples) 
 		return x_samples, weights
 
 class PW_bilinear_distribution(object):
 	def __init__(self, xu, yu, zs):
 		'''
-		Works with regular distributions, ie. there is a grid formed by xu and yu and we anly give the axis coordinates of the grid. 
+		Works with regular distributions, ie. there is a grid formed by xu and yu and we only give the axis coordinates of the grid. 
 		xu, yu - Unique values of the grid coordinates
 		zs - (len(xy), len(yu)) array of zs values.
 		'''
@@ -97,13 +93,12 @@ class PW_bilinear_distribution(object):
 				weights[loc] = p_ygx*weights_y_s
 		return x_samples, y_samples, weights
 		
-class PW_lincos_distribution(object):
+class PW_lincos_distribution(PW_linear_distribution):
 	def __init__(self, xs, ys):
 		'''
 		xs and ys are the piecewise linear function values. The cos(xs) factor is added within the class
 		'''
-		self.xs = xs
-		self.ys = ys
+		PW_linear_distribution.__init__(self, xs, ys)
 		self.a = (self.ys[1:] - self.ys[:-1])/(self.xs[1:] - self.xs[:-1])
 		self.b = self.ys[:-1]-self.a*self.xs[:-1]
 		self.integ = ys[1:]*N.sin(xs[1:])-ys[:-1]*N.sin(xs[:-1]) + self.a*(N.cos(xs[1:])-N.cos(xs[:-1])) # Obtained throught integration by parts. 
@@ -111,32 +106,25 @@ class PW_lincos_distribution(object):
 		self.PDF_def = self.ys*N.cos(self.xs)/self.tot_integ
 		self.CDF_def = N.add.accumulate(N.hstack([[0], self.integ]))/self.tot_integ
 
-	def find_slice(self, x):
-		comp = (N.round(x, decimals=7)>=N.vstack(self.xs)).T
-		locs = []
-		for c in comp:
-			locs.append(N.amax(N.arange(len(self.xs))[c]))
-		return locs
-
 	def __call__(self, x):
 		loc = self.find_slice(x)
 		return (self.a[loc]*x+self.b[loc])*N.cos(x)
-
-	def PDF(self, x):
-		return self(x)/self.tot_integ
 
 	def CDF(self, x):
 		loc = self.find_slice(x)
 		return self.CDF_def[loc] + (self(x)*N.sin(x)-self.ys[loc]*N.sin(self.xs[loc]) + self.a[loc]*(N.cos(self(x))-N.cos(self.xs[loc])))
 		
 	def sample(self, ns):
-		return pw_linear_importance_sampling(self, ns)
-
+		x_s, weights_s = super().sample(ns)
+		weights = weights_s*self.PDF(x_s)
+		weights /= (N.sum(weights/float(ns))) # takes care of rounding errors
+		return x_s, weights
+	
 class BDRF_distribution_noinc(object):
 	def __init__(self, th_u, phi_u, bdrf):
 		'''
 		Works with any piecewise linear distribution, ie. there is a grid formed by th_u and phi_u and we only give the axis coordinates of the grid. 
-		th_, phi_u - Unique values of the grid coordinates
+		th_u, phi_u - Unique values of the grid coordinates
 		bdrf - (len(th_u), len(phi_u)) array of bdrf values.
 		This implementation returns samples that include the cosine factor: the resulting weights are applied directly to the energy of the incident rays.
 		This _noinc does not give any indication about the incident angle
@@ -184,7 +172,7 @@ class BDRF_distribution(object):
 	def __init__(self, interpolator):
 		'''
 		Works with any piecewise linear distribution.
-		Input: interpolator able to return the piecewise linear interpolation of teh BDRF. the interpolator contains all the information needed about the definition grid.
+		Input: interpolator able to return the piecewise linear interpolation of the BDRF. The interpolator contains all the information needed about the definition grid.
 		This implementation returns samples that include the cosine factor: the resulting weights are applied directly to the energy of the incident rays.
 		'''
 		self.th_u, self.phi_u = interpolator.grid[2:]
@@ -221,7 +209,7 @@ class BDRF_distribution(object):
 		# Sample dist_th
 		th_samples, weights_th = self.dist_th.sample(ns)
 		# With samples found for x, compute the the PDF for y given the x-sampled values and sample y.
-		# It is faster here to use importance sampling over the th_u values intervals. Thsi way we use a common sampling function for all of them and only need weighting
+		# It is faster here to use importance sampling over the th_u values intervals. This way we use a common sampling function for all of them and only need weighting
 		phi_samples = N.zeros(ns)
 		weights = N.zeros(ns)
 		for i in range(len(self.th_u)-1):
@@ -243,7 +231,7 @@ def pw_linear_importance_sampling(dist, ns):
 	ns the number of samples
 	'''
 	sampling_dist = PW_linear_distribution(dist.xs, dist(dist.xs))
-	x_s, weights_s = sampling_dist.sample(ns)
+	x_s, weights_s = dist.sample(ns)
 	weights = weights_s*dist.PDF(x_s)
 	weights /= (N.sum(weights/float(ns))) # takes care of rounding errors
 	return x_s, weights
@@ -267,7 +255,7 @@ def cylinder_sampling(r_ext, h, ns, normal_in=False, volume=False):
 		ths = N.random.uniform(size=ns)*2.*N.pi
 		positions = N.vstack([r_ext*N.cos(ths), r_ext*N.sin(ths), zs])
 		normals = N.vstack([N.cos(ths), N.sin(ths), N.zeros(ns)])
-		if normal_in == False:
+		if normal_in == True:
 			normals = -normals
 		return positions, normals
 	else:
@@ -278,7 +266,7 @@ def cylinder_sampling(r_ext, h, ns, normal_in=False, volume=False):
 def sphere_sampling(r_ext, ns, normal_in=False, volume=False):
 	'''
 	Uniformly samples a sphere surface or volume if volume argument is True
-	Surface sampling also returns surface normal vetcors at the sampled points locations.
+	Surface sampling also returns surface normal vectors at the sampled points locations.
 	'''
 	phis = N.random.uniform(size=ns)*2.*N.pi
 	cosths = N.random.uniform(low=-1., high=1., size=ns) # cosine of polar angle uniformly distributed

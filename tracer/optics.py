@@ -205,7 +205,6 @@ def attenuations(path_lengths, k, lambda_0, energy):
 	'''
 	T = N.exp(-4.*N.pi*k/lambda_0*path_lengths)
 	energy = T*energy
-	
 	return energy
 
 if __name__ == '__main__':

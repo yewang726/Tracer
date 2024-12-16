@@ -177,6 +177,12 @@ class Surface(HasFrame):
 				n0.addChild(mat)
 				fluxmap = False
 
+			if 'RefractiveAbsorbant' in o.__class__.__name__:
+				mat = coin.SoMaterial()
+				mat.ambientColor = (1,1,1)
+				mat.transparency = (0.8)
+				n0.addChild(mat)
+				
 			if fluxmap is not None:
 				if hasattr(o,'get_all_hits'):
 					hitdata = o.get_all_hits()

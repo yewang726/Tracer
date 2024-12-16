@@ -37,27 +37,27 @@ def get_angle(v1, v2, signed=False):
 		
 	return angs
 	
-def axes_and_angles_between(vecs, normal):
+def axes_and_angles_between(vecs, normals):
 	'''
 	Determine the plane normal betwene each vecs and respective normals, and estimates the angle to go from vecs to normals while rotating around the normal.
 	'''
 	if len(vecs.shape)>1:
 		normals = N.tile(normal, (vecs.shape[1],1)).T
 		axes = get_plane_normals(vecs.T, normals.T) # axis of rotation ie normal of the plane formed by both vectors
-		angles = get_angles(vecs, normal, signed=False) # angle between +z in directiosn referential and normals on the plane defined earlier
+		angles = get_angles(vecs, normals, signed=False) # angle between +z in directiosn referential and normals on the plane defined earlier
 	else:
 		axes = get_plane_normals(vecs.T, normal.T) # axis of rotation ie normal of the plane formed by both vectors
 		angles = get_angle(vecs, normal, signed=False) # angle between +z in directiosn referential and normals on the plane defined earlier
 
 	return axes, angles
 	
-def rotate_z_to_normal(vecs, normal):
+def rotate_z_to_normal(vecs, normals):
 	'''
 	Rotate vecs so that they consider normals as their +z. The rotation matrix is established so that it is the minimal rotation along the plane formed between each direction and their respective normal unlike the rotate_to_z alternative in the spatial_geometry module.
 	'''
 	zs = N.zeros((vecs.shape))
 	zs[2] = 1.
-	axes, angles = axes_and_angles_between(zs, normal)
+	axes, angles = axes_and_angles_between(zs, normals)
 	# rotate +z to normals
 	for i, d in enumerate(vecs.T):
 		if angles[i] != 0.:
