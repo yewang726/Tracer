@@ -1,10 +1,9 @@
 
-Tracer - a Pythonic ray-tracing package with solar energy focus.
+Tracer - a Pythonic general ray-tracing package.
 
 About
 -----
-Tracer is a ray-tracing engine and suite of tools focused on solar energy 
-applications.
+Tracer is a ray-tracing engine and suite of tools focused on radiative heat transfer and optical simulations.
 
 The motivation for writing tracer:
 * Current solutions lack programmability and extensibility
@@ -21,40 +20,54 @@ Status
 The code is advanced enough to produce research. It is currently a programming
 library. NO GUI yet.
 
+DISCLAIMER: The documentation and installation is outdated, but he project is active! Doubts, need advice?: charlesalexis.asselineau@ump.es
+
 Current capablilities:
-- Flat, parabolic, spherical and conical surfaces
+- Flat, parabolic, spherical, conical and quadric surfaces
 - Specular and diffuse reflections with surface slope error
+- BDRF
+- Transparency and attenuation
 - A bunch of results analysis tools
 - Pillbox and Buie sunshape implementations
 - Radiosity sytem solver for thermal emissions
 - Basic parallel processing
-
-There are no provisions for spectral response or polarization yet, but the 
-package is designed to make it easy to add them, and also to remove unnecessary
-features and plug in speed-improving optical and geometrical models that
-utilize problem-specific features.
+- Kd-Tree acceleration structure
+- Spectral simulations
 
 Open-source python magic happens: if you want to do something, you can do it.
 
 Installation
 ------------
 LINUX:
-To install Tracer on your system, run the following from the command line from your downloaded Tracer directory:
+Tested under Ubuntu 22 (running as WSL)
 
-  python setup.py install
+1) Prepare Linux: sudo apt update && sudo apt upgrade
+2) Setup python environment
+2.1) sudo apt install python3-venv
+2.2) Create virtual environment: python3 -m venv .venv
+2.3) Activate virtual environment: source ./.venv/bin/activate
 
-Before installing, make sure that the following dependencies are installed:
-- Numpy/Scipy (http://www.scipy.org/scipylib/download.html)
-  command: sudo apt-get install python-numpy
+3) (Optional) Install visualisation-dependencies (not required if running headless)
+3.1) Install build dependencies: sudo apt install build-essential cmake
+3.2) Install coin3d dependencies: sudo apt install libboost-all-dev xorg-dev libglu1-mesa-dev
+3.3) Install coin3d
+3.3.1) git clone --recurse-submodules https://github.com/coin3d/coin coin
+3.3.2) sudo cmake -Hcoin -Bcoin_build -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release -DCOIN_BUILD_DOCUMENTATION=OFF
+3.3.3) sudo cmake --build coin_build --target all --config Release -- -j4
+3.3.4) sudo cmake --build coin_build --target install --config Release -- -j4
+3.4) Install pivy: sudo apt install python3-pivy
+3.5) Allow access to global pivy package:
+3.5.1) nano ./.venv/pyvenv.cfg
+3.5.2) Change: 'include-system-site-packages = false' to 'include-system-site-packages = true'
 
-- Matplotlib (http://matplotlib.org/downloads.html)
-  command: sudo apt-get install python-matplotlib
+4) Clone Tracer repository
+git clone https://github.com/casselineau/Tracer
+cd Tracer
 
-- Coin 3D (https://bitbucket.org/Coin3D/coin/downloads)
-  command: sudo apt-get install python-pivy
+5) Install python requirements from Tracer
+5.1) Headless: pip install -r requirements_headless.txt
+5.2) With visualisation: pip install -r requirements.txt
 
-- Pathos (https://github.com/uqfoundation)
-  This one requires you to download the packages from the github repository and run the installs individually using "python setup.py install" in your downloaded directories. All the dependencies (dill, pox, multiprocess and ppft) are on the same github repository and should be installed individually.
 
 WINDOWS:
 To run on MS Windows:
@@ -63,9 +76,7 @@ To run on MS Windows:
 - Download an X Server for windows in order to render the images: https://sourceforge.net/projects/xming/
 - Run the X Server Client
 - Run Tracer
+------------
 
-Getting Help, Getting Involved
-------------------------------
-Slightly outdated documentation and reference matereial can be found on 
-http://yosefm.github.com/tracer/
+Doubts, need advice?: charlesalexis.asselineau@ump.es
 

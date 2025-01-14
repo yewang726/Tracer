@@ -7,6 +7,7 @@ References:
 
 from .quadric import QuadricGM
 import numpy as N
+import logging
 
 class InfiniteCylinder(QuadricGM):
 	"""
@@ -88,7 +89,7 @@ class FiniteCylinder(InfiniteCylinder):
 		coords = N.concatenate((coords, N.ones((2,1,coords.shape[-1]))), axis=1)
 
 		local = []
-		for i in xrange(coords.shape[0]):
+		for i in range(coords.shape[0]):
 			local.append(N.dot(proj[:-1,:], coords[i]))
 		#height= N.sum(proj[None,2,:,None] * N.concatenate((coords, N.ones((2,1,coords.shape[-1]))), axis=1), axis=1)
 		local = N.array(local)
@@ -156,4 +157,135 @@ class FiniteCylinder(InfiniteCylinder):
 		flux = eners/areas
 
 		return N.hstack(flux)
+		
+class RectCutCylinder(FiniteCylinder):
+
+	def __init__(self, diameter, height, w, h):
+		FiniteCylinder.__init__(self, diameter, height)
+		self.half_dims = N.array([w/2., h/2.])
+		if (N.sqrt(N.sum(self.half_dims**2))<=self._R).all():
+			logging.error('Bad rectangular cut cylindershape, width and height too small')
+			stop
+
+	def _select_coords(self, coords, prm):
+		select = N.empty(prm.shape[1])
+		select.fill(N.nan)
+
+		# Projects the hit coordinates in a local frame on the z axis.
+		proj = N.linalg.inv(self._working_frame)
+		coords = N.concatenate((coords, N.ones((2,1,coords.shape[-1]))), axis=1)
+		local = []
+		for i in range(coords.shape[0]):
+			local.append(N.dot(proj[:-1,:], coords[i]))
+		local = N.array(local)
+		x, y, height = local[:,0], local[:,1], local[:,2]
+		
+		# Checks if the local_z-projected hit coords are in the actual height of the furstum
+		# and if the parameter is positive so that the ray goes ahead.
+		inside_height = (-self._half_h <= height) & (height <= self._half_h)
+		absx, absy = N.abs(x), N.abs(y)
+		inside_w = absx <= self.half_dims[0]
+		inside_h = absy <= self.half_dims[1]
+   
+		inside = inside_height & inside_w & inside_h
+		positive = prm > 1e-6
+		hitting = inside & positive
+
+		# Choses between the two intersections offered by the surface.
+		select[N.logical_and(*hitting)] = True
+		one_hitting = N.logical_xor(*hitting)
+		select[one_hitting] = N.nonzero(hitting.T[one_hitting,:])[1]
+
+		return select
+
+	def mesh(self, resolution=40):
+		"""
+		Represent the surface as a mesh in local coordinates. Uses polar
+		bins, i.e. the points are equally distributed by angle and radius,
+		not by x,y.
+		
+		Arguments:
+		resolution - in points per unit length (so the number of points 
+			returned is O(A*resolution**2) for area A)
+		
+		Returns:
+		x, y, z - each a 2D array holding in its (i,j) cell the x, y, and z
+			coordinate (respectively) of point (i,j) in the mesh.
+		"""
+		if resolution is None:
+			resolution = 20
+
+		# frame corners:
+		top_right_corner_angle = N.round(N.arctan2(*self.half_dims[::-1]), decimals=9)
+
+		phis = N.array([top_right_corner_angle, N.pi-top_right_corner_angle,  N.pi+top_right_corner_angle, 2.*N.pi-top_right_corner_angle, 2.*N.pi+top_right_corner_angle])
+		
+		# intersection of circular perimeter and frame:
+		r_beyond = self._R>=self.half_dims
+		crossing_angle = []
+		if r_beyond.any():
+			if r_beyond[0]:
+				crossing_angle.append(N.arccos(self.half_dims[0]/self._R))
+			if r_beyond[1]: 
+				crossing_angle.append(N.arcsin(self.half_dims[1]/self._R))
+			crossing_angle = N.round(crossing_angle, decimals=10)
+			crossing_angles_in = N.hstack([crossing_angle, N.pi-crossing_angle, N.pi+crossing_angle, 2.*N.pi-crossing_angle, 2.*N.pi+crossing_angle])		
+			phis = N.hstack([phis, crossing_angles_in])
+			
+		# Sort angles
+		phis = N.sort(phis)
+		
+		# make azimuth angles
+		angs = []
+		for i, p in enumerate(phis[:-1]):
+			angresloc = N.ceil((phis[i+1]-p)/(2.*N.pi)*resolution)
+			if angresloc < 2:
+				angresloc = 2
+			angs.append(N.linspace(p, phis[i+1], int(angresloc))[:-1])
+		angs.append(phis[-1])
+		angs = N.unique(N.round(N.hstack(angs), decimals=8))
+		
+		# Look at the distance of the frame point at each angle. If it is bigger than the radius, use the radius, otherwise, skipp as it is a hole and close the submesh.
+		rs = N.zeros((len(angs), resolution+1))
+		meshes = []
+		startang = 0
+		current_mesh = []
+		for i, a in enumerate(angs):
+			rx = N.abs(N.round(self.half_dims[0]/N.cos(a), decimals=5))
+			ry = N.abs(N.round(self.half_dims[1]/N.sin(a), decimals=5))
+			r = N.amin([rx, ry])
+
+			if r==self._R:
+				current_mesh.append(i)
+				# Make and finish this mesh as we have a node where the rectangular border crosses.
+				rs[i] = N.ones(resolution+1)*r
+				if len(current_mesh)>1:
+					x = rs[current_mesh].T*N.cos(angs[current_mesh])
+					y = rs[current_mesh].T*N.sin(angs[current_mesh])
+					z = N.tile(N.linspace(-self._half_h, self._half_h, x.shape[0]), (x.shape[1],1)).T
+
+					meshes.append(x)
+					meshes.append(y)
+					meshes.append(z)
+					current_mesh = [] 
+			elif r>self._R:
+				current_mesh.append(i)
+				rs[i] = N.ones(resolution+1)*self._R
+				
+			if a == angs[-1]:
+				x = rs[current_mesh].T*N.cos(angs[current_mesh])
+				y = rs[current_mesh].T*N.sin(angs[current_mesh])
+				z = N.tile(N.linspace(-self._half_h, self._half_h, x.shape[0]), (x.shape[1],1)).T
+				meshes.append(x)
+				meshes.append(y)
+				meshes.append(z)
+ 
+		# continuous mesh, well behaved shape
+		if len(meshes) == 0: # there was no mesh break therefore and no mesh added
+			x = rs.T*N.cos(angs)
+			y = rs.T*N.sin(angs)
+			z = N.tile(N.linspace(-self._half_h, self._half_h, x.shape[0]), (x.shape[1],1)).T
+
+		return meshes
+
 

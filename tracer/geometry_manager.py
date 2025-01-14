@@ -4,7 +4,6 @@
 # TODO: explore abstract meta-classes in Python.
 
 import numpy as N
-#import pivy.coin as coin
 
 class GeometryManager(object):
 	def find_intersections(self, frame, ray_bundle):

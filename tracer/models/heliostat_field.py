@@ -16,7 +16,7 @@ from .one_sided_mirror import rect_one_sided_mirror, rect_para_one_sided_mirror,
 from ..spatial_geometry import rotx, roty, rotz, general_axis_rotation
 
 class HeliostatField(Assembly):
-	def __init__(self, positions, width, height, absorptivity, aim_height, sigma, bi_var=True, focal_lengths=None, quad_params=None, MCRT_option='fast'):
+	def __init__(self, positions, width, height, absorptivity, aim_height, sigma, bi_var=True, focal_lengths=None, quad_params=None, MCRT_option='fast', facet_offset=N.array([0,0,0])):
 		"""
 		Generates a field of heliostats, each being a rectangular one-sided
 		mirror, initially pointing downward - for safety reasons, of course :)
@@ -30,7 +30,7 @@ class HeliostatField(Assembly):
 		sigma - Heliostats surface slope error
 		bi_var - If true, the slope error is a gaussian bi-variate on x and y, if false, it is an axi-symmetrical radial gaussian error.
 		focal_lengths - the focal lengths of mirrors. If None, the mirrors are flat or quadric.
-		quad_params - if not None, it is an array of quadric parameters for a RectFlatQuadricSurfaceGM instance: each line is [a, b, c, d, e] the coefficients of the flat quadratic surface. 
+		quad_params - if not None, it is an array of quadric parameters for a RectFlatQuadricSurfaceGM instance: each line is [a, b, c, d, e] the coefficients of the flat quadratic surface.
 		"""
 		self._pos = positions
 		self._th = aim_height
@@ -49,11 +49,12 @@ class HeliostatField(Assembly):
 		for p in range(positions.shape[0]):
 			assert(not((focal_lengths[p] != None) and (quad_params[p] != None)))
 			if (focal_lengths[p] == None) and (quad_params[p] == None):
-				hstat = rect_one_sided_mirror(width, height, absorptivity[p], sigma, bi_var, MCRT_option)	
+				hstat = rect_one_sided_mirror(width, height, absorptivity[p], sigma, bi_var, MCRT_option, location=facet_offset)	
 			elif focal_lengths[p] != None: 
-				hstat = rect_para_one_sided_mirror(width, height, focal_lengths[p], absorptivity[p], sigma, bi_var, MCRT_option)
+				hstat = rect_para_one_sided_mirror(width, height, focal_lengths[p], absorptivity[p], sigma, bi_var, MCRT_option, location=facet_offset)
 			else:
-				hstat = flat_quad_one_sided_mirror(width, height, quad_params[p], absorptivity[p], sigma, bi_var, MCRT_option)
+				hstat = flat_quad_one_sided_mirror(width, height, quad_params[p], absorptivity[p], sigma, bi_var, MCRT_option, location=facet_offset)
+			#hstat.set_location(facet_offset)
 	
 			trans = face_down.copy()
 			trans[:3,3] = positions[p]
@@ -70,10 +71,11 @@ class HeliostatField(Assembly):
 		"""Change the verical position of the tower's target."""
 		self._th = h
 	
+
 	def aim_to_sun(self, aiming_pos, sun_vec, tracking='azimuth_elevation'):
 		"""
 		Aim the heliostats in a direction that brings the incident energy to
-		the tower.
+		the receiver location.
 		
 		Arguments:
 		azimuth - the sun's azimuth, in radians from North, clockwise.
@@ -81,6 +83,7 @@ class HeliostatField(Assembly):
 			in radians.
 		tracking - 'azimuth_elevation'; 'titl_roll': tracking actuation method. 
 		"""
+
 		tower_vec = -self._pos+aiming_pos
 		tower_vec /= N.sqrt(N.sum(tower_vec**2, axis=1)[:,None])
 		hstat_norm=sun_vec+tower_vec
@@ -128,6 +131,13 @@ class HeliostatField(Assembly):
 			
 				self._heliostats[hidx].set_rotation(rot)
 
+
+	def get_tracking_vectors(self):
+		heliostats = self.get_heliostats()
+		tracking_vectors = []
+		for h in range(len(heliostats)):
+			tracking_vectors.append(N.dot(heliostats[h].get_rotation(), N.vstack([0.,0.,1.])))
+		return tracking_vectors
 
 def solar_vector(azimuth, zenith):
 	"""

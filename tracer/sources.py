@@ -5,12 +5,28 @@ rays expected from that source.
 
 References:
 .. [1] Monte Carlo Ray Tracing, Siggraph 2003 Course 44
+
+
+TODO:
+Systematize source declarations:
+- ray vertices from surface/volume sampling -> could be obtains in the reay_trace_utils.sampling module or, potentally, adding sampling functions to the geometry managers.
+- ray directions directions from normalised directional radiance distributions -> using sampling functions but keeping all radiance preoccupations here.
+	- For surface emissions: cosine weighted
+	- for volume emisison, no cosine weighting?
+- ray energy from total source power or Planckian thermal emisison source 
 """
 
 from numpy import random, linalg as LA
 import numpy as N
 from tracer.ray_bundle import RayBundle, concatenate_rays
 from tracer.spatial_geometry import *
+from ray_trace_utils.vector_manipulations import rotate_z_to_normal
+
+def Planck(wl, T):
+	h = 6.626070040e-34 # Planck constant
+	c = 299792458. # Speed of light in vacuum
+	k = 1.38064852e-23 # Boltzmann constant
+	return (2.*N.pi*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
 
 def single_ray_source(position, direction, flux=None):
 	'''
@@ -32,9 +48,19 @@ def single_ray_source(position, direction, flux=None):
 	singray.set_energy(flux*N.ones(1))
 	return singray
 
+def lambertian_directions_sampling(num_rays, ang_range, normals=None):
+	# Diffuse divergence from +Z:
+	# development based on eq. 2.12  from [1]
+	xi1 = random.uniform(low=0., high=2.*N.pi, size=num_rays) # Phi
+	xi2 = random.uniform(size=num_rays) # Rtheta
+	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
+	dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
+	if normals is not None:
+		dirs = rotate_z_to_normal(dirs, normals)
+	return dirs
+
 def pillbox_sunshape_directions(num_rays, ang_range):
-	"""
-	Calculates directions for a ray bundles with ``num_rays`` rays, distributed
+	"""	Calculates directions for a ray bundles with ``num_rays`` rays, distributed
 	as a pillbox sunshape shining toward the +Z axis, and deviating from it by
 	at most ang_range, such that if all rays have the same energy, the flux
 	distribution comes out right.
@@ -47,19 +73,7 @@ def pillbox_sunshape_directions(num_rays, ang_range):
 	A (3, num_rays) array whose each column is a unit direction vector for one
 		ray, distributed to match a pillbox sunshape.
 	"""
-	# Diffuse divergence from +Z:
-	# development based on eq. 2.12  from [1]
-	xi1 = random.uniform(high=2.*N.pi, size=num_rays) # Phi
-	xi2 = random.uniform(size=num_rays) # Rtheta
-	#theta = N.arcsin(N.sin(ang_range)*N.sqrt(xi2))
-	#sin_th = N.sin(theta)
-	#a = N.vstack((N.cos(xi1)*sin_th, N.sin(xi1)*sin_th , N.cos(theta)))
-
-	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)	 
-
-	a = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
-
-	return a
+	return lambertian_directions_sampling(num_rays, ang_range)
 
 def bivariate_directions(num_rays, ang_range_hor, ang_range_vert):
 	"""
@@ -210,7 +224,7 @@ def solar_rect_bundle(num_rays, center, direction, x, y, ang_range, flux=None, p
 
 #def bivariate_rect_bundle(num_rays, center, direction, x, y, ang_range_vert, ang_range_hor, flux=None):
 
-def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction, x, y, ang_range, flux=None, procs=1):
+def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction, x, y, ang_range, flux=None, procs=1, wavelength=None):
 	a = pillbox_sunshape_directions(num_rays, ang_range)
 	# Rotate to a frame in which <direction> is Z:
 	perp_rot = rotation_to_z(rays_direction)
@@ -226,8 +240,12 @@ def oblique_solar_rect_bundle(num_rays, center, source_direction, rays_direction
 	vertices_local = N.vstack((ys, xs, N.zeros(num_rays)))
 	perp_rot = rotation_to_z(source_direction)
 	vertices_global = N.dot(perp_rot, vertices_local)
-
-	rayb = RayBundle(vertices=vertices_global + center, directions=directions)
+	if wavelength is not None:
+		wavelengths = N.repeat(wavelength, num_rays)
+		rayb = RayBundle(vertices=vertices_global + center, directions=directions, wavelengths=wavelengths)
+	else:
+		rayb = RayBundle(vertices=vertices_global + center, directions=directions)
+	
 	if flux != None:
 		cosangle = 2.*N.arcsin(0.5*N.sqrt(N.sum((rays_direction-source_direction)**2)))
 		rayb.set_energy(x*y/num_rays*flux*N.ones(num_rays)*N.cos(cosangle))
@@ -320,6 +338,32 @@ def buie_distribution(num_rays, CSR, pre_process_CSR=True):
 
 	return directions
 
+def sunshape_to_ray_directions(angles, norm_intensity, num_rays):
+	num_rays = int(num_rays)
+	thetas = N.zeros(num_rays)
+	R_thetas = N.random.uniform(size=num_rays)
+	# Integration over full linear intervals:
+	integ_n_flux = 0.5*(norm_intensity[:-1]*N.cos(angles[:-1])*N.sin(angles[:-1])+norm_intensity[1:]*N.cos(angles[1:])*N.sin(angles[1:]))*(angles[1:]-angles[:-1])
+	# Numerical PDF and CDF
+	PDF = integ_n_flux/N.sum(integ_n_flux)
+	CDF = N.add.accumulate(N.hstack(([0.],PDF)))
+	# theta angles within the intervals:	
+	for i in range(len(CDF)-1):
+		slice_loc = N.logical_and((R_thetas >= CDF[i]), (R_thetas < CDF[i+1]))
+		A = norm_intensity[i]*N.cos(angles[i])*N.sin(angles[i])
+		B = norm_intensity[i+1]*N.cos(angles[i+1])*N.sin(angles[i+1])
+		if A==B:
+			thetas[slice_loc] = angles[i]+N.sum(integ_n_flux)*(R_thetas[slice_loc]-CDF[i])/A
+		else:
+			C = 2.*N.sum(integ_n_flux)*(R_thetas[slice_loc]-CDF[i])*(angles[i+1]-angles[i])
+			R = -(-A*angles[i+1]+B*angles[i]+N.sqrt(((angles[i]-angles[i+1])*A)**2.+C*(B-A)))/(A-B)
+			thetas[slice_loc] = R
+
+	phis = N.random.uniform(high=2.*N.pi, size=num_rays)
+	sin_th = N.sin(N.hstack(thetas))
+	directions = N.vstack((N.cos(phis)*sin_th, N.sin(phis)*sin_th , N.cos(thetas)))
+	return directions
+
 def buie_sunshape(num_rays, center, direction, radius, CSR, flux=None, pre_process_CSR=True, rays_direction=None):
 	'''
 	Generate a ray bundle according to Buie et al.: "Sunshape distributions for terrestrial simulations." Solar Energy 74 (2003) 113-122 (DOI: 10.1016/S0038-092X(03)00125-7).
@@ -400,8 +444,8 @@ def rect_buie_sunshape(num_rays, center, direction, width, height, CSR, flux=Non
 	S = width*height
 
 	# Rays escaping direction setup:
-	#if rays_direction == None:
-	#	rays_direction = direction
+	if rays_direction is None:
+		rays_direction = direction
 
 	# Uniform ray energy:
 	cosangle = 2.*N.sin(N.sqrt(N.sum((rays_direction-direction)**2))/2.)
@@ -682,4 +726,37 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 
 	return rayb
 
+def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, area, thetas, band_emittance, T, nrays, band):
+	'''
+	Returns a RayBundle instance describing a thermal emitter with given directional emissivities in a given spectral band.
 
+	Arguments:
+	positions 	ray positions
+	normals  	normals to the surface at teh ray positions.
+	thetas 	 	angles at which emittances are given
+	band_emittance if a number, the band hemispherical emittance, 
+				if a 1D array of the length of thetas, the directional band emittances
+	T  			Temperature of the emitter
+	nrays 		Number of rays to trace
+	band		A list of 2 values, whose shape is different from 
+	'''
+	from ray_trace_utils.sampling import PW_lincos_distribution
+	# Build axisymmetrical emissions profile
+	# Integrate the emittance
+	wls = N.linspace(band[0], band[1], int((band[1]-band[0])/1e-9))
+	bb_spectral_radiance_in_band = N.trapz(Planck(wls, T), wls)
+	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band
+	# Sample the emmissions profile distribution to get directions and energy
+	thetas_rays, weights = PW_lincos_distribution(thetas, source_spectral_radiance).sample(nrays)
+	source_exitance = N.trapz(source_spectral_radiance*N.cos(thetas), thetas)
+	phis_rays = N.random.uniform(size=nrays)*2.*N.pi
+	directions = N.array([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
+	# rotate to make z the normals
+	for i,d in enumerate(directions.T):
+		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
+	energy = weights*source_exitance*area/nrays
+	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
+	rayb.set_ref_index(N.ones(nrays))
+	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
+	rayb._create_property('wavelengths', N.ones(nrays)*N.sum(band)/2.)
+	return rayb

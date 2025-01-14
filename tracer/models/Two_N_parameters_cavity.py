@@ -387,7 +387,6 @@ class TwoNparamcav(Assembly):
 						S_L = N.log(Re_L/(1.816*N.log(1.1*Re_L/(N.log(1.+1.1*Re_L)))))
 						f_F_L = 0.25*((-2.*N.log10(tube_roughness/(3.71*tube_diameters_in[i])+2.18*S_L/Re_L))**(-2.))
 						#f_F_L = (1.58*N.log(Re_L)-3.28)**(-2) # Correlation in Kandlikar (less precise presumably) which gives significantly lower heat transfer coefficients in the pre-dryout region
-
 						# Kandlikar
 						Co = (rho_G/rho_L)**0.5*((1.-qual)/qual)**0.8
 

@@ -1,7 +1,6 @@
 # Represents an object that is locatable in 3D space with 6 degrees of freedom.
 
 import numpy as N
-#import pivy.coin as coin
 
 class HasFrame(object):
     """
@@ -28,14 +27,12 @@ class HasFrame(object):
         if rotation is None:
             rotation = N.eye(3)
 
-        self._transform = N.zeros((4,4))
-        self._transform[3,:] = N.r_[0, 0, 0, 1]
+        self._transform = N.eye(4)
         self.set_location(location)
         self.set_rotation(rotation)
+        self._transform[:3,3] = self._loc
+        self._transform[:3,:3] = self._rot
         self._temp_frame = self._transform
-        
-        # TODO for compatibility with Coin3D we might need to store these rotations
-        # internally as quaternions... hmmm...???
 
     def get_location(self):
         return self._loc
@@ -72,7 +69,7 @@ class HasFrame(object):
 
     def transform_frame(self, transform):
         """Updates the transformation matrix that puts the surface into the global
-        coordinates. I.e., if the object the surface is in is rotated, than the surface
+        coordinates. I.e., if the object the surface is in is rotated, then the surface
         is also rotated.  It then defines a temporary rotated frame for use of
         calculations."""
         self._temp_frame = N.dot(transform, self._transform)
@@ -82,6 +79,8 @@ class HasFrame(object):
         Create the Coin3D transform to translate and rotate this frame, in
         accordance with the self._rot and self._loc matrices held in this class.
         """
+        import pivy.coin as coin
+        
         n = coin.SoSeparator()
         if N.any(self._loc != N.array((0,0,0))):
             tr = coin.SoTranslation()

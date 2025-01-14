@@ -12,7 +12,7 @@ class QuadricGM(GeometryManager):
     A base class for quadric surfaces, to be derived for creation of specific
     quadric geometries. Each subclass should define the following methods:
     
-    get_ABC(ray_bundle) - Given a RAyBundle instance, return A, B, C, the
+    get_ABC(ray_bundle) - Given a RayBundle instance, return A, B, C, the
         coefficients of a quadratic equation of t, the parametric position
         on each ray where it hits the surface (each of A, B, C is as long as
         the number of rays in ray_bundle).
@@ -28,7 +28,7 @@ class QuadricGM(GeometryManager):
     
     Additionally, overriding _select_coords(self, coords, prm) may be required.
     """
-    
+
     def find_intersections(self, frame, ray_bundle):
         """
         Register the working frame and ray bundle, calculate intersections
@@ -50,62 +50,65 @@ class QuadricGM(GeometryManager):
         n = ray_bundle.get_num_rays()
         c = self._working_frame[:3,3]
   
-        params = N.empty(n)
-        params.fill(N.inf)
-        vertices = N.empty((3,n))
-        
-        # Gets the relevant A, B, C from whichever quadric surface, see [1]
+         # Gets the relevant A, B, C from whichever quadric surface, see [1]
         A, B, C = self.get_ABC(ray_bundle)
 
         # Identify quadric intersections        
         delta = B**2. - 4.*A*C
         any_inters = delta >= 1e-6
         num_inters = any_inters.sum()
-
-        if num_inters == 0:
-            self._vertices = vertices
-            self._params = params #
-            return params      
-
-        A = A[any_inters]
-        B = B[any_inters]
-        C = C[any_inters]        
         
-        delta = N.sqrt(B**2. - 4.*A*C)
+        params = N.empty(n)
+        params.fill(N.inf)
+        vertices = N.empty((3,n))
 
-        hits = N.empty((2,num_inters))
-        hits.fill(N.nan)
+        if num_inters != 0:
+        
+            A = A[any_inters]
+            B = B[any_inters]
+            C = C[any_inters]        
+            
+            delta = N.sqrt(B**2. - 4.*A*C)
 
-        # Identify linear equations
-        is_linear = A == 0
-        # Identify B = 0 cases
-        is_Bnull = B == 0
+            hits = N.empty((2,num_inters))
+            hits.fill(N.nan)
 
-        # Solve linear intersections        
-        hits[:,is_linear & ~is_Bnull] = N.tile(-C[is_linear & ~is_Bnull]/B[is_linear & ~is_Bnull], (2,1))     
-        # Solve B = 0 cases (give bad information on N.sign(0))
-        hits[0,~is_linear & is_Bnull] = -N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
-        hits[1,~is_linear & is_Bnull] = N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
-        # Solve quadric regular intersections
-        q = -0.5*(B+N.sign(B)*delta)
-        hits[0,~is_linear & ~is_Bnull] = q[~is_linear & ~is_Bnull]/A[~is_linear & ~is_Bnull]
-        hits[1,~is_linear & ~is_Bnull] = C[~is_linear & ~is_Bnull]/q[~is_linear & ~is_Bnull]
-       
-        # Get intersection coordinates using rays parameters
-        inters_coords = v[:,any_inters] + d[:,any_inters]*hits.reshape(2,1,-1)     
+            # Identify linear equations
+            is_linear = A == 0
+            # Identify B = 0 cases
+            is_Bnull = B == 0
 
-        # Quadrics can have two intersections. Here we allow child classes
-        # to choose based on own method:
-        select = self._select_coords(inters_coords, hits)
-        not_missed = ~N.isnan(select)
-        any_inters[any_inters] = not_missed
-        select = N.array(select[not_missed], dtype=N.int_)
-        params[any_inters] = N.choose(select, hits[:,not_missed])
-        vertices[:,any_inters] = N.choose(select, inters_coords[...,not_missed])
+            # Solve linear intersections        
+            hits[:,is_linear & ~is_Bnull] = N.tile(-C[is_linear & ~is_Bnull]/B[is_linear & ~is_Bnull], (2,1))     
+            # Solve B = 0 cases (give bad information on N.sign(0))
+            hits[0,~is_linear & is_Bnull] = -N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
+            hits[1,~is_linear & is_Bnull] = N.sqrt(-C[~is_linear & is_Bnull]/A[~is_linear & is_Bnull])
+            # Solve quadric regular intersections
+            q = -0.5*(B+N.sign(B)*delta)
+            hits[0,~is_linear & ~is_Bnull] = q[~is_linear & ~is_Bnull]/A[~is_linear & ~is_Bnull]
+            hits[1,~is_linear & ~is_Bnull] = C[~is_linear & ~is_Bnull]/q[~is_linear & ~is_Bnull]
+           
+            # Get intersection coordinates using rays parameters
+            inters_coords = v[:,any_inters] + d[:,any_inters]*hits.reshape(2,1,-1)     
+
+            # Quadrics can have two intersections. Here we allow child classes
+            # to choose based on own method:
+            select = self._select_coords(inters_coords, hits)
+            not_missed = ~N.isnan(select)
+            any_inters[any_inters] = not_missed
+            select = N.array(select[not_missed], dtype=N.int_)
+            params[any_inters] = N.choose(select, hits[:,not_missed])
+            vertices[:,any_inters] = N.choose(select, inters_coords[...,not_missed])
         
         # Storage for later reference:
-        self._vertices = vertices
-        self._params = params
+        if hasattr(self, '_global'):
+            self._global = N.concatenate([self._global, vertices], axis=-1)
+        else:
+            self._global = vertices
+        if hasattr(self, '_params'):
+            self._params = N.hstack([self._params, params])
+        else:
+            self._params = params
   
         return params
     
@@ -127,7 +130,7 @@ class QuadricGM(GeometryManager):
         Returns:
         The index of the selected intersection, or None if neither will do.
         """
-        is_positive = prm > 0.
+        is_positive = prm >= 1e-6
         select = N.empty(prm.shape[1])
         select.fill(N.nan)
 
@@ -151,19 +154,15 @@ class QuadricGM(GeometryManager):
             register_incoming()
         """
         self._idxs = idxs
-        self._vertices = self._vertices[:,idxs].copy()
-        
-        # Normals to the surface at the intersection points are calculated by
-        # the subclass' _normals method.
-        self._norm = self._normals(self._vertices.T,
-                self._working_bundle.get_directions()[:,idxs].T)
+        self._global = self._global[:,self._idxs]
     
     def get_normals(self):
         """
         Report the normal to the surface at the hit point of selected rays in
         the working bundle.
         """
-        return self._norm
+        norm = self._normals(self._global.T, self._working_bundle.get_directions()[:,self._idxs].T)
+        return norm
     
     def get_intersection_points_global(self):
         """
@@ -172,17 +171,16 @@ class QuadricGM(GeometryManager):
         Returns:
         A 3-by-n array for 3 spatial coordinates and n rays selected.
         """
-        return self._vertices
+        return self._global
     
     def done(self):
         """
         Discard internal data structures. This should be called after all
         information on the latest bundle's results have been extracted already.
         """
-        if hasattr(self, '_vertices'):
-            del self._vertices
+        if hasattr(self, '_global'):
+            del self._global
         if hasattr(self, '_idxs'):
-            del self._norm
             del self._idxs
         GeometryManager.done(self)
 

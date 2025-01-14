@@ -53,7 +53,7 @@ class TriangularFace(FiniteFlatGM):
 		"""
 		ray_prms = FiniteFlatGM.find_intersections(self, frame, ray_bundle)
 		
-		# Transform the charachteristic vertices to the global systenm, then
+		# Transform the characteristic vertices to the global system, then
 		# project the global intersection points to get barycentric
 		# coordinates, see [1, 2]
 		glob_verts = np.dot(frame, np.vstack(( self._verts, np.array([1,1]) )) )
@@ -68,10 +68,11 @@ class TriangularFace(FiniteFlatGM):
 			(uv**2 - norms_sq[0]*norms_sq[1])
 		
 		# Use barycentric coordinates for exclusion test.
-		outside = np.any(bc < 0, axis=1) | (bc.sum(axis=1) > 1)
+		outside = np.any(bc <0, axis=1) | (bc.sum(axis=1) > 1.)
 		ray_prms[outside] = np.inf
-		
+		del self._local
 		return ray_prms
+
 		
 	def mesh(self, resolution=None):
 		"""
@@ -88,7 +89,7 @@ class TriangularFace(FiniteFlatGM):
 			coordinate (respectively) of point (i,j) in the mesh.
 		"""
 		if resolution==None:
-			resolution=2
+			resolution=10
 		if resolution < 2:
 			raise ValueError('Resolution must be >= 2')
 		

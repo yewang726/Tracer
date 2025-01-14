@@ -1,5 +1,7 @@
 import numpy as N
+
 from tracer.quadric import QuadricGM
+
 
 class FlatQuadricSurfaceGM(QuadricGM):
 	"""Implements the geometry of an infinite "flat" quadratic surface. "Flat" refers to the fact that this surface will have only one solution in the local z plane."""

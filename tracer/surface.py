@@ -29,6 +29,7 @@ class Surface(HasFrame):
 		self._geom = geometry
 		self._opt = optics
 		self._fixed_color = fixed_color
+		self._transparency = 0
 		if fixed_color:
 			self._fixed_color = fixed_color[:3]	
 			if len(fixed_color) == 4:
@@ -64,7 +65,7 @@ class Surface(HasFrame):
 		Returns
 		A 1D array with the parametric position of intersection along each of
 			the rays. Rays that missed the surface return +infinity.
-		"""	  
+		"""	
 		self._current_bundle = ray_bundle
 		return self._geom.find_intersections(self._temp_frame, ray_bundle)
 	
@@ -91,6 +92,14 @@ class Surface(HasFrame):
 			and directions according to optics laws.
 		"""
 		return self._opt(self._geom, self._current_bundle, self._selected)
+		
+	def update_current_bundle(self, bundle):
+		'''
+		When ray-tracing is performed sequentially to cull potential iintersection 
+		tests, the surface registers the full bundle in sequences. To include the 
+		consolidated ray bndle, the current bundle is rebased with this function.
+		'''
+		self._current_bundle = bundle
 	
 	def done(self):
 		"""
@@ -161,14 +170,20 @@ class Surface(HasFrame):
 				n0.addChild(mat)
 				fluxmap = False
 
-			elif o.__class__.__name__ == 'PeriodicBoundary':
+			if o.__class__.__name__ == 'PeriodicBoundary':
 				mat = coin.SoMaterial()
 				mat.ambientColor = (.0,.5,.5)
 				mat.transparency = (0.8)
 				n0.addChild(mat)
 				fluxmap = False
 
-			elif fluxmap != None:
+			if 'RefractiveAbsorbant' in o.__class__.__name__:
+				mat = coin.SoMaterial()
+				mat.ambientColor = (1,1,1)
+				mat.transparency = (0.8)
+				n0.addChild(mat)
+				
+			if fluxmap is not None:
 				if hasattr(o,'get_all_hits'):
 					hitdata = o.get_all_hits()
 					xyz = self.global_to_local(hitdata[1])[:3]
@@ -180,6 +195,8 @@ class Surface(HasFrame):
 							flux = [flux]
 					else:
 						fluxmap = False
+				else:
+					fluxmap = False
 			else: 
 				mat = coin.SoMaterial()
 				mat.diffuseColor = (0.2,0.2,0.2)
@@ -188,7 +205,7 @@ class Surface(HasFrame):
 				fluxmap = False
 
 		meshes = self._geom.get_scene_graph(resolution)
-		for m in xrange(len(meshes)/3):
+		for m in range(int(len(meshes)/3)):
 			n = coin.SoSeparator()
 
 			X,Y,Z = meshes[3*m:3*m+3]
@@ -227,6 +244,7 @@ class Surface(HasFrame):
 				n0.addChild(mymatbind)
 			
 			n0.addChild(n)
+			
 			
 		return n0
 
