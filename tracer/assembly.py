@@ -47,7 +47,6 @@ class Assembly(HasFrame):
 		proj = N.round(N.linalg.inv(self._temp_frame), decimals=9)
 		return N.dot(proj, N.vstack((points, N.ones(points.shape[1]))))
 
-
 	def get_local_objects(self):
 		"""
 		Get the list of objects belonging directly to this assembly, without

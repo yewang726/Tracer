@@ -5,8 +5,8 @@ from tracer.surface import Surface
 from tracer.flat_surface import RectPlateGM
 from tracer.sphere_surface import SphericalGM
 from tracer.ray_bundle import *
-from ray_trace_utils.sampling import cylinder_sampling, sphere_sampling, PW_linear_distribution
-from ray_trace_utils.vector_manipulations import axes_and_angles_between, rotate_z_to_normal
+from tracer.ray_trace_utils.sampling import cylinder_sampling, sphere_sampling, PW_linear_distribution
+from tracer.ray_trace_utils.vector_manipulations import axes_and_angles_between, rotate_z_to_normal
 from tracer.spatial_geometry import general_axis_rotation
 from tracer.ellipsoid import *
 from tracer.optics_callables import RealReflective, TransparentTransmitter
@@ -14,7 +14,7 @@ from tracer.tracer_engine import TracerEngine
 from tracer.CoIn_rendering.rendering import *
 from tracer.sources import isotropic_directions_sampling
 from sys import path
-from ray_trace_utils.estimator import Estimator
+from tracer.ray_trace_utils.estimator import Estimator
 from copy import copy
 import pathlib
 
@@ -57,7 +57,7 @@ class SolarSimulator(Assembly):
 	'''
 	A solar simulator class. The solar simulator is composed of modules.		
 	'''
-	def __init__(self, modules_positions, modules_directions, modules_dicts, targets, homegenizer=None):
+	def __init__(self, modules_positions, modules_directions, modules_dicts, targets, homogenizer=None):
 		'''
 		Parameters:
 		- modules_positions: list (or array) of M length 3 (or shape(M,3)) vectors with each vector giving the position of the module first focus in 3D space.

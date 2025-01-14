@@ -20,13 +20,7 @@ from numpy import random, linalg as LA
 import numpy as N
 from tracer.ray_bundle import RayBundle, concatenate_rays
 from tracer.spatial_geometry import *
-from ray_trace_utils.vector_manipulations import rotate_z_to_normal
-
-def Planck(wl, T):
-	h = 6.626070040e-34 # Planck constant
-	c = 299792458. # Speed of light in vacuum
-	k = 1.38064852e-23 # Boltzmann constant
-	return (2.*N.pi*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
+from tracer.ray_trace_utils.vector_manipulations import rotate_z_to_normal
 
 def single_ray_source(position, direction, flux=None):
 	'''
@@ -48,7 +42,7 @@ def single_ray_source(position, direction, flux=None):
 	singray.set_energy(flux*N.ones(1))
 	return singray
 
-def lambertian_directions_sampling(num_rays, ang_range, normals=None):
+def isotropic_directions_sampling(num_rays, ang_range, normal=None):
 	# Diffuse divergence from +Z:
 	# development based on eq. 2.12  from [1]
 	xi1 = random.uniform(low=0., high=2.*N.pi, size=num_rays) # Phi
@@ -56,7 +50,7 @@ def lambertian_directions_sampling(num_rays, ang_range, normals=None):
 	sinsqrt = N.sin(ang_range)*N.sqrt(xi2)
 	dirs = N.vstack((N.cos(xi1)*sinsqrt, N.sin(xi1)*sinsqrt , N.sqrt(1.-sinsqrt**2.)))
 	if normals is not None:
-		dirs = rotate_z_to_normal(dirs, normals)
+		dirs = rotate_z_to_normal(dirs, normal)
 	return dirs
 
 def pillbox_sunshape_directions(num_rays, ang_range):
@@ -73,7 +67,7 @@ def pillbox_sunshape_directions(num_rays, ang_range):
 	A (3, num_rays) array whose each column is a unit direction vector for one
 		ray, distributed to match a pillbox sunshape.
 	"""
-	return lambertian_directions_sampling(num_rays, ang_range)
+	return isotropic_directions_sampling(num_rays, ang_range)
 
 def bivariate_directions(num_rays, ang_range_hor, ang_range_vert):
 	"""
@@ -726,37 +720,30 @@ def vf_cylinder_bundle(num_rays, rc, lc, center, direction, flux=None, rays_in=T
 
 	return rayb
 
-def spectral_band_axisymmetrical_thermal_emission_source(positions, normals, area, thetas, band_emittance, T, nrays, band):
-	'''
-	Returns a RayBundle instance describing a thermal emitter with given directional emissivities in a given spectral band.
+def planck(wl, T):
+	h = 6.626070040e-34 # Planck constant
+	c = 299792458. # Speed of light in vacuum
+	k = 1.38064852e-23 # Boltzmann constant
+	return (2.*N.pi*h*c**2.)/((wl)**5.)/(N.exp(h*c/(wl*k*T))-1.)
 
-	Arguments:
-	positions 	ray positions
-	normals  	normals to the surface at teh ray positions.
-	thetas 	 	angles at which emittances are given
-	band_emittance if a number, the band hemispherical emittance, 
-				if a 1D array of the length of thetas, the directional band emittances
-	T  			Temperature of the emitter
-	nrays 		Number of rays to trace
-	band		A list of 2 values, whose shape is different from 
-	'''
-	from ray_trace_utils.sampling import PW_lincos_distribution
+def emission_source_axisymmetrical(positions, thetas, emittance, T, nrays, wl_range=None):
 	# Build axisymmetrical emissions profile
-	# Integrate the emittance
-	wls = N.linspace(band[0], band[1], int((band[1]-band[0])/1e-9))
-	bb_spectral_radiance_in_band = N.trapz(Planck(wls, T), wls)
-	source_spectral_radiance = band_emittance*bb_spectral_radiance_in_band
-	# Sample the emmissions profile distribution to get directions and energy
-	thetas_rays, weights = PW_lincos_distribution(thetas, source_spectral_radiance).sample(nrays)
-	source_exitance = N.trapz(source_spectral_radiance*N.cos(thetas), thetas)
-	phis_rays = N.random.uniform(size=nrays)*2.*N.pi
-	directions = N.array([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
+	# Integrate the emmittance
+	if wl_range is not None:
+		wls = N.linspace(wl_range[0], wl_range, 1000)
+		luminance = planck(wls, T)
+		bb_luminance_total = N.trapz(luminance, wls)
+	else:
+		bb_luminance_total = 5.67e-8/N.pi*T**4
+	emissions = emittance*bb_luminance_total*N.cos(thetas)
+	# Sample the emisisons profile distribution to get directions and energy
+	thetas_rays, weights = PW_lincos_distribution(thetas, emissions).sample(ns)
+	phis_rays = N.random.uniform(ns)*2.*N.pi
+	directions = N.vstack([N.sin(thetas_rays)*N.cos(phis_rays), N.sin(thetas_rays)*N.sin(phis_rays), N.cos(thetas_rays)])
 	# rotate to make z the normals
-	for i,d in enumerate(directions.T):
+	for i,d in enumerate(directions):
 		directions[:,i] = N.dot(rotation_to_z(normals[:,i]), d)	
-	energy = weights*source_exitance*area/nrays
+	
+	energy = weigths
 	rayb = RayBundle(vertices=positions, directions=directions, energy=energy)
-	rayb.set_ref_index(N.ones(nrays))
-	wl_avg = N.sum(wls*bb_spectral_radiance_in_band)/N.sum(bb_spectral_radiance_in_band)
-	rayb._create_property('wavelengths', N.ones(nrays)*N.sum(band)/2.)
 	return rayb

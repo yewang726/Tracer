@@ -8,8 +8,8 @@ import numpy as N
 from scipy.interpolate import RegularGridInterpolator
 #from BDRF_models import Cook_Torrance, regular_grid_Cook_Torrance
 from tracer.ray_bundle import RayBundle
-from ray_trace_utils.sampling import BDRF_distribution
-from ray_trace_utils.vector_manipulations import get_angle
+from tracer.ray_trace_utils.sampling import BDRF_distribution
+from tracer.ray_trace_utils.vector_manipulations import get_angle
 from tracer.spatial_geometry import rotz, general_axis_rotation
 
 import sys, inspect
@@ -724,11 +724,9 @@ class RefractiveHomogenous(OpticsCallable):
 			# reflected rays are TIR OR rays selected to go to reflection
 			sel_refl = selector[refl]
 			sel_refr = selector[~refl]
-
 			dirs_refr = N.zeros((3, len(selector)))
 			dirs_refr[:,refr] = out_dirs
 			dirs_refr = dirs_refr[:,~refl]
-
 			
 			reflected_rays = rays.inherit(sel_refl, vertices=inters[:,refl],
 				direction=optics.reflections(

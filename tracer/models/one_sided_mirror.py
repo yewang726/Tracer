@@ -82,7 +82,8 @@ def flat_quad_one_sided_mirror(width, height, quad_params, absorptivity=0., sigm
 
 	#surf.set_location(surf.get_location()-N.array([0,0,(width/2.)**2.*surf.get_geometry_manager().a+(height/2.)**2.*surf.get_geometry_manager().b])) # to have the aperture as the reference.
 	obj = AssembledObject(surfs = [surf])
-	obj.surfaces_for_next_iteration = types.MethodType(surfaces_for_next_iteration, obj)#, obj.__class__)
+	obj.surfaces_for_next_iteration = types.MethodType(
+		surfaces_for_next_iteration, obj, obj.__class__)
 	return obj
 
 def one_sided_receiver(width, height, absorptivity=1, location=None, rotation=None):

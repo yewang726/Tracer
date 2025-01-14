@@ -1,7 +1,7 @@
 import numpy as N
 import time
 from tracer.object import AssembledObject
-from ray_trace_utils.vector_manipulations import AABB
+from tracer.ray_trace_utils.vector_manipulations import AABB
 import logging
 
 class Kdtodo(object):
